@@ -78,7 +78,7 @@ wss.on('connection', (ws, req) => {
     alive: true,
     hp: 100,
     weapon: 'uzi',
-    // Inbound Packet Rate Limiting (Token Bucket: Max 45 msgs/sec)
+    // Inbound Packet Rate Limiting (Token Bucket: Max 120 msgs/sec)
     msgCount: 0,
     lastSecReset: Date.now(),
     ws
@@ -86,6 +86,11 @@ wss.on('connection', (ws, req) => {
   clients.set(ws, clientData);
 
   send(ws, 'CONNECTED', { playerId, nickname: clientData.nickname });
+
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
 
   ws.on('message', (messageRaw) => {
     try {
@@ -95,8 +100,8 @@ wss.on('connection', (ws, req) => {
         clientData.lastSecReset = now;
       }
       clientData.msgCount++;
-      // Drop packets if client exceeds 45 messages per second (Anti-DoS / Anti-Lag)
-      if (clientData.msgCount > 45) {
+      // High-capacity 120 msgs/sec threshold to prevent packet starvation during intense firefights
+      if (clientData.msgCount > 120) {
         return;
       }
 
@@ -111,6 +116,15 @@ wss.on('connection', (ws, req) => {
     handleDisconnect(ws, clientData);
   });
 });
+
+// Cloudflare & Tunnel Keepalive Heartbeat (Every 15 seconds to prevent idle disconnect)
+setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    }
+  });
+}, 15000);
 
 function handleClientMessage(ws, client, msg) {
   const { type, payload } = msg;
@@ -501,6 +515,10 @@ function broadcastToRoom(roomCode, type, payload, excludeWs = null) {
   const data = JSON.stringify({ type, payload });
   lobby.players.forEach(p => {
     if (p.ws && p.ws.readyState === WebSocket.OPEN && p.ws !== excludeWs) {
+      // Backpressure protection: skip high-frequency sync if client socket buffer is congested
+      if (type === 'PLAYER_SYNC' && p.ws.bufferedAmount > 32 * 1024) {
+        return;
+      }
       p.ws.send(data);
     }
   });

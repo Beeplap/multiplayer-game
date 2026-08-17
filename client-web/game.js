@@ -1293,8 +1293,16 @@ class MultiplayerGameApp {
   }
 
   updateCamera() {
+    if (!isFinite(this.localPlayer.x)) this.localPlayer.x = 700;
+    if (!isFinite(this.localPlayer.y)) this.localPlayer.y = 900;
+    if (!isFinite(this.camera.x)) this.camera.x = this.localPlayer.x;
+    if (!isFinite(this.camera.y)) this.camera.y = this.localPlayer.y;
+    if (!isFinite(this.targetZoom)) this.targetZoom = 1.0;
+    if (!isFinite(this.currentZoom) || this.currentZoom <= 0) this.currentZoom = 1.0;
+
     // Ultra-smooth exponential zoom smoothing (zero jitter)
     this.currentZoom += (this.targetZoom - this.currentZoom) * 0.06;
+    this.currentZoom = Math.max(0.5, Math.min(2.0, this.currentZoom));
 
     // Smooth position interpolation directly tracking player center
     this.camera.x += (this.localPlayer.x - this.camera.x) * 0.08;
@@ -1465,18 +1473,27 @@ class MultiplayerGameApp {
 
           const timeSpan = s1.time - s0.time;
           const alpha = timeSpan > 0 ? Math.max(0, Math.min(1, (renderTime - s0.time) / timeSpan)) : 1;
-          rp.x = s0.x + (s1.x - s0.x) * alpha;
-          rp.y = s0.y + (s1.y - s0.y) * alpha;
-          rp.vx = s0.vx + (s1.vx - s0.vx) * alpha;
-          rp.vy = s0.vy + (s1.vy - s0.vy) * alpha;
-          rp.aimAngle = s0.aim + (s1.aim - s0.aim) * alpha;
+          rp.x = (s0.x || 0) + ((s1.x || 0) - (s0.x || 0)) * alpha;
+          rp.y = (s0.y || 0) + ((s1.y || 0) - (s0.y || 0)) * alpha;
+          rp.vx = (s0.vx || 0) + ((s1.vx || 0) - (s0.vx || 0)) * alpha;
+          rp.vy = (s0.vy || 0) + ((s1.vy || 0) - (s0.vy || 0)) * alpha;
+
+          // Shortest angular difference interpolation to prevent rotation flipping
+          let dAngle = (s1.aim || 0) - (s0.aim || 0);
+          while (dAngle > Math.PI) dAngle -= Math.PI * 2;
+          while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+          rp.aimAngle = (s0.aim || 0) + dAngle * alpha;
         } else {
           // Smooth forward dead-reckoning fallback
-          rp.targetX += rp.vx * 0.4;
-          rp.targetY += rp.vy * 0.4;
+          rp.targetX += (rp.vx || 0) * 0.4;
+          rp.targetY += (rp.vy || 0) * 0.4;
           rp.x += (rp.targetX - rp.x) * 0.28;
           rp.y += (rp.targetY - rp.y) * 0.28;
         }
+
+        if (!isFinite(rp.x)) rp.x = 700;
+        if (!isFinite(rp.y)) rp.y = 900;
+        if (!isFinite(rp.aimAngle)) rp.aimAngle = 0;
 
         const rpGroundY = this.getGroundYAt(rp.x);
         rp.x = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.x));
@@ -1913,8 +1930,14 @@ class MultiplayerGameApp {
     const ctx = this.ctx;
     const W = this.canvas.width;
     const H = this.canvas.height;
-    const camX = this.camera.x;
-    const camY = this.camera.y;
+
+    // Reset matrix transform on every frame to prevent permanent canvas corruption / freeze
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const camX = isFinite(this.camera.x) ? this.camera.x : this.worldWidth / 2;
+    const camY = isFinite(this.camera.y) ? this.camera.y : this.worldHeight / 2;
+    const zoom = isFinite(this.currentZoom) && this.currentZoom > 0 ? this.currentZoom : 1.0;
 
     // 1. Stable Photorealistic Mountain Backdrop with Smooth Parallax
     if (this.assets.loaded && this.assets.bg.complete) {
@@ -3202,10 +3225,16 @@ class MultiplayerGameApp {
   }
 
   drawArticulatedSoldier(ctx, p, isLocal, walkCycle, recoil) {
-    ctx.save();
-    ctx.translate(p.x, p.y);
+    const px = isFinite(p.x) ? p.x : 700;
+    const py = isFinite(p.y) ? p.y : 900;
+    const pAim = isFinite(p.aimAngle) ? p.aimAngle : 0;
+    const pWalk = isFinite(walkCycle) ? walkCycle : 0;
+    const pRecoil = isFinite(recoil) ? recoil : 0;
 
-    const facingLeft = Math.cos(p.aimAngle) < 0;
+    ctx.save();
+    ctx.translate(px, py);
+
+    const facingLeft = Math.cos(pAim) < 0;
     const teamColor = p.team === 'BLUE' ? '#00A2FF' : '#FF3366';
     const visorColor = p.team === 'BLUE' ? '#00E5FF' : '#FFD600';
     const equippedWep = isLocal ? this.currentWeapon : (p.weapon || 'uzi');
@@ -3216,7 +3245,7 @@ class MultiplayerGameApp {
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(p.aimAngle) * 350, Math.sin(p.aimAngle) * 350);
+      ctx.lineTo(Math.cos(pAim) * 350, Math.sin(pAim) * 350);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -3224,8 +3253,8 @@ class MultiplayerGameApp {
     ctx.save();
     if (facingLeft) ctx.scale(-1, 1);
 
-    let localAim = p.aimAngle;
-    if (facingLeft) localAim = Math.PI - p.aimAngle;
+    let localAim = pAim;
+    if (facingLeft) localAim = Math.PI - pAim;
 
     // 1. JETPACK
     ctx.fillStyle = '#222B38';
