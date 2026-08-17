@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mini Militia 2D — Tactical Jetpack Shooter</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app-root">
+
+    <!-- SCREEN 1: MAIN MENU & PRIVATE LOBBY CREATION -->
+    <div id="screen-main-menu" class="screen active">
+      <div class="menu-card glass-panel">
+        <div class="game-logo">
+          <span class="logo-tag">GLOBAL MULTIPLAYER</span>
+          <h1>MINI MILITIA 2D</h1>
+          <p class="logo-sub">INFINITE JETPACK & TACTICAL WARFARE</p>
+        </div>
+
+        <div class="input-group">
+          <label for="player-nickname">YOUR CALLSIGN</label>
+          <input type="text" id="player-nickname" maxlength="14" placeholder="Enter Nickname" value="Commander">
+        </div>
+
+        <div class="server-config-row">
+          <label for="server-url">SERVER ADDRESS</label>
+          <input type="text" id="server-url" value="ws://localhost:3000">
+        </div>
+
+        <div class="menu-action-grid">
+          <button id="btn-create-lobby" class="btn btn-primary btn-large">
+            <span class="btn-icon">⚡</span>
+            <div class="btn-text">
+              <strong>CREATE PRIVATE LOBBY</strong>
+              <small>Generates 5-digit room code for friends</small>
+            </div>
+          </button>
+
+          <div class="divider-text"><span>OR JOIN WITH 5-DIGIT CODE</span></div>
+
+          <div class="join-code-row">
+            <input type="text" id="join-code-input" maxlength="5" placeholder="5-DIGIT CODE" autocomplete="off" spellcheck="false">
+            <button id="btn-join-lobby" class="btn btn-accent">JOIN</button>
+          </div>
+        </div>
+
+        <div class="quick-info-box">
+          <span>🚀 Infinite Jetpack Flight • 🔫 Unlimited Ammo • 💣 Finite Explosives</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: 5-DIGIT ROOM LOBBY SCREEN -->
+    <div id="screen-lobby" class="screen">
+      <div class="lobby-card glass-panel">
+        <div class="lobby-header">
+          <div class="lobby-code-box">
+            <span class="code-label">PRIVATE ROOM CODE</span>
+            <div class="code-display">
+              <span id="display-room-code">-----</span>
+              <button id="btn-copy-code" class="btn-icon-small" title="Copy Code">📋</button>
+            </div>
+          </div>
+
+          <div class="lobby-settings-summary">
+            <span id="lobby-mode-tag" class="badge badge-gold">2v2 TDM</span>
+            <span id="lobby-status-tag" class="badge badge-green">WAITING FOR SQUAD</span>
+          </div>
+
+          <button id="btn-leave-lobby" class="btn-icon-small danger" title="Leave Room">✕</button>
+        </div>
+
+        <!-- Match Mode Selector (Host Only) -->
+        <div id="host-settings-bar" class="host-controls">
+          <span class="control-label">MATCH FORMAT:</span>
+          <div class="mode-btn-group">
+            <button class="mode-select-btn active" data-mode="1v1">1v1 DUEL</button>
+            <button class="mode-select-btn" data-mode="2v2">2v2 TDM</button>
+            <button class="mode-select-btn" data-mode="FFA">4P FFA</button>
+          </div>
+        </div>
+
+        <!-- Team Roster Columns -->
+        <div class="teams-container" id="teams-wrapper">
+          <!-- Red Team Column -->
+          <div class="team-column red-team">
+            <div class="team-header">
+              <span class="team-title">🔴 RED TEAM</span>
+              <span id="red-count" class="team-count">1/2</span>
+            </div>
+            <div id="red-player-list" class="player-roster"></div>
+            <button id="btn-join-red" class="btn btn-team red">JOIN RED</button>
+          </div>
+
+          <!-- VS Divider -->
+          <div class="vs-divider"><span>VS</span></div>
+
+          <!-- Blue Team Column -->
+          <div class="team-column blue-team">
+            <div class="team-header">
+              <span class="team-title">🔵 BLUE TEAM</span>
+              <span id="blue-count" class="team-count">0/2</span>
+            </div>
+            <div id="blue-player-list" class="player-roster"></div>
+            <button id="btn-join-blue" class="btn btn-team blue">JOIN BLUE</button>
+          </div>
+        </div>
+
+        <!-- Lobby Footer Actions -->
+        <div class="lobby-footer">
+          <button id="btn-toggle-ready" class="btn btn-secondary">
+            <span id="ready-status-text">SET READY ✅</span>
+          </button>
+          
+          <button id="btn-start-match" class="btn btn-primary btn-launch">
+            🔥 START MATCH
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCREEN 3: 2D REAL-TIME JETPACK COMBAT ARENA -->
+    <div id="screen-game" class="screen">
+      <!-- In-Game HUD -->
+      <div class="game-hud">
+        <!-- Top Left Health & Infinite Jet Status -->
+        <div class="hud-top-left">
+          <div class="player-stat-bar hp-bar">
+            <span class="stat-label">HP</span>
+            <div class="bar-fill-track"><div id="hud-hp-fill" class="bar-fill red"></div></div>
+            <span id="hud-hp-val" class="stat-val">100</span>
+          </div>
+
+          <div class="jet-status-badge">
+            <span class="jet-icon">🚀</span>
+            <span class="jet-text">INFINITE THRUST ACTIVE</span>
+          </div>
+        </div>
+
+        <!-- Center Scoreboard -->
+        <div class="hud-center-score">
+          <div class="score-team red"><span id="score-red">0</span></div>
+          <div class="score-sep">:</div>
+          <div class="score-team blue"><span id="score-blue">0</span></div>
+        </div>
+
+        <!-- Top Right Weapon & Ammo (Infinite) -->
+        <div class="hud-top-right">
+          <div class="weapon-card">
+            <span id="hud-weapon-name" class="weapon-name">DUAL UZI</span>
+            <span class="ammo-count highlight">∞ UNLIMITED</span>
+          </div>
+          <button id="btn-exit-game" class="btn-icon-small" title="Exit to Lobby">✕</button>
+        </div>
+      </div>
+
+      <!-- Tactical Inventory Action Bar (Finite Consumables) -->
+      <div class="tactical-action-bar">
+        <button id="btn-throw-grenade" class="tactical-btn" title="Throw Grenade (Key: G)">
+          <span class="tac-icon">💣</span>
+          <span class="tac-name">GRENADE</span>
+          <span id="tac-grenade-count" class="tac-badge">2</span>
+        </button>
+
+        <button id="btn-plant-mine" class="tactical-btn" title="Plant Mine (Key: M)">
+          <span class="tac-icon">⚡</span>
+          <span class="tac-name">MINE</span>
+          <span id="tac-mine-count" class="tac-badge">1</span>
+        </button>
+
+        <button id="btn-throw-smoke" class="tactical-btn" title="Deploy Smoke (Key: X)">
+          <span class="tac-icon">💨</span>
+          <span class="tac-name">SMOKE</span>
+          <span id="tac-smoke-count" class="tac-badge">1</span>
+        </button>
+      </div>
+
+      <!-- Kill Feed Banner -->
+      <div id="kill-feed-container" class="kill-feed"></div>
+
+      <!-- 2D Canvas Arena -->
+      <div class="canvas-container">
+        <canvas id="game-canvas"></canvas>
+      </div>
+
+      <!-- Mobile Touch Controls -->
+      <div class="touch-controls" id="touch-controls">
+        <div class="joystick-zone left" id="joy-left-zone">
+          <div class="joystick-base" id="joy-left-base">
+            <div class="joystick-thumb" id="joy-left-thumb"></div>
+          </div>
+          <span class="joy-label">MOVE / JETPACK</span>
+        </div>
+
+        <div class="joystick-zone right" id="joy-right-zone">
+          <div class="joystick-base" id="joy-right-base">
+            <div class="joystick-thumb" id="joy-right-thumb"></div>
+          </div>
+          <span class="joy-label">AIM / AUTO-FIRE</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
