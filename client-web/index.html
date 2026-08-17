@@ -63,7 +63,7 @@
         </div>
 
         <div class="quick-info-box">
-          <span>🚀 Infinite Flight • 📱 Landscape Mobile Ready • 💥 [F] Equip Gun Prompt</span>
+          <span>🚀 Infinite Flight • ☣️ Toxic Gas • 🎯 [Q] Switch [F] Throw • 💥 [E] Equip Gun</span>
         </div>
       </div>
     </div>
@@ -173,39 +173,34 @@
         </div>
       </div>
 
-      <!-- Interactive [F] Equip Gun Prompt (Mobile Tap Friendly) -->
+      <!-- Interactive [E] Equip Gun Prompt (Mobile Tap Friendly) -->
       <div id="equip-prompt-box" class="equip-prompt-box hidden">
         <button id="btn-equip-prompt" class="btn-equip-action">
-          <span class="key-badge">F</span>
+          <span class="key-badge">E</span>
           <span id="equip-prompt-text">EQUIP WEAPON</span>
         </button>
       </div>
 
-      <!-- Tactical Inventory Action Bar (Finite Consumables - Auto Picked Up) -->
-      <div class="tactical-action-bar">
-        <button id="btn-throw-grenade" class="tactical-btn" title="Throw Grenade (Key: G)">
-          <span class="tac-icon">💣</span>
-          <span class="tac-name">GRENADE</span>
-          <span id="tac-grenade-count" class="tac-badge">2</span>
+      <!-- Compact 3D Throwable Slot & Throw Trigger (Key: Q to Toggle, F to Throw) -->
+      <div class="throwable-compact-slot">
+        <!-- Toggle Button (Key: Q) -->
+        <button id="btn-toggle-throwable" class="btn-tac-toggle" title="Toggle Throwable (Key: Q)">
+          <span class="key-sub">Q</span>
+          <span class="switch-icon">🔄</span>
         </button>
 
-        <button id="btn-plant-mine" class="tactical-btn" title="Plant Mine (Key: M)">
-          <span class="tac-icon">⚡</span>
-          <span class="tac-name">MINE</span>
-          <span id="tac-mine-count" class="tac-badge">1</span>
-        </button>
-
-        <button id="btn-throw-smoke" class="tactical-btn" title="Deploy Smoke (Key: X)">
-          <span class="tac-icon">💨</span>
-          <span class="tac-name">SMOKE</span>
-          <span id="tac-smoke-count" class="tac-badge">1</span>
+        <!-- Main Active Throw Action Button (Key: F) -->
+        <button id="btn-throw-active" class="btn-tac-main" title="Throw Equipped Item (Key: F)">
+          <span class="key-sub main-key">F</span>
+          <div id="tac-active-icon" class="tac-3d-icon">💣</div>
+          <span id="tac-active-count" class="tac-active-badge">2</span>
         </button>
       </div>
 
       <!-- Kill Feed Banner -->
       <div id="kill-feed-container" class="kill-feed"></div>
 
-      <!-- 2D Canvas Arena -->
+      <!-- 2D Canvas Arena with Custom Crosshair -->
       <div class="canvas-container">
         <canvas id="game-canvas"></canvas>
       </div>

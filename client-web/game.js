@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — High-Performance Low-Latency Combat Client with Dead-Reckoning & Anti-Lag
+// 🎮 Mini Militia 2D — Tactical Combat with Yellow Toxic Gas, Sticky Landmines & Crosshair
 
 class MultiplayerGameApp {
   constructor() {
@@ -14,11 +14,13 @@ class MultiplayerGameApp {
     this.camera = { x: 0, y: 0 };
 
     this.currentWeapon = 'uzi';
+    this.activeThrowable = 'grenade'; // 'grenade' | 'mine' | 'toxic_gas'
     this.walkCycle = 0;
     this.recoilOffset = 0;
     this.nearbyGun = null;
     this.pickupNotifications = [];
     this.respawnTimer = 0;
+    this.toxicDamageTick = 0;
 
     this.initDOM();
     this.loadAssets();
@@ -58,9 +60,10 @@ class MultiplayerGameApp {
     this.equipPromptText = document.getElementById('equip-prompt-text');
     this.btnEquipPrompt = document.getElementById('btn-equip-prompt');
 
-    this.tacGrenadeCountEl = document.getElementById('tac-grenade-count');
-    this.tacMineCountEl = document.getElementById('tac-mine-count');
-    this.tacSmokeCountEl = document.getElementById('tac-smoke-count');
+    this.btnToggleThrowable = document.getElementById('btn-toggle-throwable');
+    this.btnThrowActive = document.getElementById('btn-throw-active');
+    this.tacActiveIconEl = document.getElementById('tac-active-icon');
+    this.tacActiveCountEl = document.getElementById('tac-active-count');
   }
 
   loadAssets() {
@@ -80,7 +83,7 @@ class MultiplayerGameApp {
     }
   }
 
-  // ──────────────── WEBSOCKET & LOW-LATENCY NETWORKING ────────────────
+  // ──────────────── WEBSOCKET & NETWORKING ────────────────
   initWebSocket() {
     let wsUrl = this.serverUrlInput.value.trim();
     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
@@ -171,7 +174,7 @@ class MultiplayerGameApp {
         break;
 
       case 'SMOKE_SPAWN':
-        this.handleRemoteSmoke(payload);
+        this.handleRemoteToxicSmoke(payload);
         break;
 
       case 'PICKUP_COLLECT':
@@ -276,18 +279,16 @@ class MultiplayerGameApp {
     const fsBtn = document.getElementById('btn-fullscreen-toggle');
     if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen);
 
-    // Instant Mobile Touch Actions
-    const bindTouchAction = (id, callback) => {
-      const el = document.getElementById(id);
+    // Instant Touch Actions
+    const bindTouchAction = (el, callback) => {
       if (!el) return;
       el.addEventListener('click', (e) => { e.preventDefault(); callback(); });
       el.addEventListener('touchend', (e) => { e.preventDefault(); callback(); });
     };
 
-    bindTouchAction('btn-equip-prompt', () => this.equipNearbyGun());
-    bindTouchAction('btn-throw-grenade', () => this.triggerGrenadeThrow());
-    bindTouchAction('btn-plant-mine', () => this.triggerMinePlant());
-    bindTouchAction('btn-throw-smoke', () => this.triggerSmokeDeploy());
+    bindTouchAction(this.btnEquipPrompt, () => this.equipNearbyGun());
+    bindTouchAction(this.btnToggleThrowable, () => this.cycleThrowable());
+    bindTouchAction(this.btnThrowActive, () => this.throwActiveItem());
   }
 
   updateLobbyUI(lobby) {
@@ -357,7 +358,7 @@ class MultiplayerGameApp {
       inventory: {
         grenades: 2,
         mines: 1,
-        smoke: 1
+        toxic_gas: 1
       }
     };
 
@@ -365,7 +366,7 @@ class MultiplayerGameApp {
     this.bullets = [];
     this.grenades = [];
     this.landmines = [];
-    this.smokeClouds = [];
+    this.toxicClouds = [];
     this.particles = [];
 
     this.groundY = 1080;
@@ -410,7 +411,7 @@ class MultiplayerGameApp {
     this.tacticalPickups = [
       { id: 'pk_g1', type: 'GRENADE', x: 460, y: 620, label: '💣 FRAG GRENADES', available: true },
       { id: 'pk_m1', type: 'MINE', x: 1140, y: 500, label: '⚡ PROXIMITY MINE', available: true },
-      { id: 'pk_s1', type: 'SMOKE', x: 2520, y: 600, label: '💨 SMOKE GRENADE', available: true },
+      { id: 'pk_s1', type: 'TOXIC_GAS', x: 2520, y: 600, label: '☣️ TOXIC MUSTARD GAS', available: true },
       { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 720, label: '❤️ MEDICAL CASE', available: true }
     ];
 
@@ -483,15 +484,20 @@ class MultiplayerGameApp {
     this.addPickupNotification(`⚡ NEW ${rarity} ${gunName} DROPPED!`, '#FFD600');
   }
 
+  // ──────────────── KEYBINDINGS & INPUT ────────────────
   setupInputHandlers() {
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
       this.keys[key] = true;
 
-      if (key === 'f') this.equipNearbyGun();
-      if (key === 'g') this.triggerGrenadeThrow();
-      if (key === 'm') this.triggerMinePlant();
-      if (key === 'x') this.triggerSmokeDeploy();
+      // Key E: Pick / Equip Weapons
+      if (key === 'e') this.equipNearbyGun();
+
+      // Key Q: Toggle Active Throwable
+      if (key === 'q') this.cycleThrowable();
+
+      // Key F: Throw Active Throwable
+      if (key === 'f') this.throwActiveItem();
     });
 
     window.addEventListener('keyup', (e) => {
@@ -576,6 +582,20 @@ class MultiplayerGameApp {
     bindJoystick(rightZone, rightThumb, this.touchJoyRight, true);
   }
 
+  // ──────────────── THROWABLE TOGGLE & FIRING ────────────────
+  cycleThrowable() {
+    const types = ['grenade', 'mine', 'toxic_gas'];
+    const nextIdx = (types.indexOf(this.activeThrowable) + 1) % types.length;
+    this.activeThrowable = types[nextIdx];
+    this.updateTacticalHUD();
+  }
+
+  throwActiveItem() {
+    if (this.activeThrowable === 'grenade') this.triggerGrenadeThrow();
+    else if (this.activeThrowable === 'mine') this.triggerMineThrow();
+    else if (this.activeThrowable === 'toxic_gas') this.triggerToxicGasDeploy();
+  }
+
   triggerGrenadeThrow() {
     const p = this.localPlayer;
     if (p.isDead || p.hp <= 0 || p.inventory.grenades <= 0) return;
@@ -598,50 +618,63 @@ class MultiplayerGameApp {
     this.send('GRENADE_THROW', grenade);
   }
 
-  triggerMinePlant() {
+  triggerMineThrow() {
     const p = this.localPlayer;
     if (p.isDead || p.hp <= 0 || p.inventory.mines <= 0) return;
 
     p.inventory.mines--;
     this.updateTacticalHUD();
 
+    const speed = 12.0;
     const mine = {
       id: `m_${Date.now()}_${Math.random()}`,
       ownerId: this.myPlayerId,
       team: p.team,
-      x: Math.round(p.x),
-      y: Math.round(p.y + 18),
+      x: Math.round(p.x + Math.cos(p.aimAngle) * 24),
+      y: Math.round(p.y + Math.sin(p.aimAngle) * 24),
+      vx: Math.round(Math.cos(p.aimAngle) * speed * 10) / 10,
+      vy: Math.round((Math.sin(p.aimAngle) * speed - 3.0) * 10) / 10,
+      stuck: false,
       armed: false,
-      armTimer: 60
+      armTimer: 45
     };
 
     this.landmines.push(mine);
     this.send('MINE_PLANT', mine);
   }
 
-  triggerSmokeDeploy() {
+  triggerToxicGasDeploy() {
     const p = this.localPlayer;
-    if (p.isDead || p.hp <= 0 || p.inventory.smoke <= 0) return;
+    if (p.isDead || p.hp <= 0 || p.inventory.toxic_gas <= 0) return;
 
-    p.inventory.smoke--;
+    p.inventory.toxic_gas--;
     this.updateTacticalHUD();
 
     const smoke = {
       id: `s_${Date.now()}_${Math.random()}`,
       x: Math.round(p.x + Math.cos(p.aimAngle) * 60),
       y: Math.round(p.y + Math.sin(p.aimAngle) * 60),
-      radius: 80,
-      life: 450
+      radius: 90,
+      life: 450,
+      ownerId: this.myPlayerId
     };
 
-    this.smokeClouds.push(smoke);
+    this.toxicClouds.push(smoke);
     this.send('SMOKE_SPAWN', smoke);
   }
 
   updateTacticalHUD() {
-    this.tacGrenadeCountEl.textContent = this.localPlayer.inventory.grenades;
-    this.tacMineCountEl.textContent = this.localPlayer.inventory.mines;
-    this.tacSmokeCountEl.textContent = this.localPlayer.inventory.smoke;
+    const inv = this.localPlayer.inventory;
+    if (this.activeThrowable === 'grenade') {
+      this.tacActiveIconEl.textContent = '💣';
+      this.tacActiveCountEl.textContent = inv.grenades;
+    } else if (this.activeThrowable === 'mine') {
+      this.tacActiveIconEl.textContent = '⚡';
+      this.tacActiveCountEl.textContent = inv.mines;
+    } else if (this.activeThrowable === 'toxic_gas') {
+      this.tacActiveIconEl.textContent = '☣️';
+      this.tacActiveCountEl.textContent = inv.toxic_gas;
+    }
   }
 
   equipNearbyGun() {
@@ -659,7 +692,7 @@ class MultiplayerGameApp {
 
       this.addPickupNotification(`+EQUIPPED ${this.nearbyGun.name}`, '#00E5FF');
 
-      // Exchange ground weapon
+      // Swap ground weapon
       this.nearbyGun.type = oldWeapon;
       this.nearbyGun.name = names[oldWeapon] || 'WEAPON';
       this.nearbyGun.rarity = oldWeapon === 'rpg' ? 'LEGENDARY' : oldWeapon === 'sniper' ? 'RARE' : oldWeapon === 'shotgun' ? 'UNCOMMON' : 'COMMON';
@@ -680,14 +713,15 @@ class MultiplayerGameApp {
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
 
-    this.localPlayer.inventory = { grenades: 2, mines: 1, smoke: 1 };
+    this.localPlayer.inventory = { grenades: 2, mines: 1, toxic_gas: 1 };
+    this.activeThrowable = 'grenade';
     this.updateTacticalHUD();
 
     const meInRoom = this.currentRoom?.players.find(p => p.id === this.myPlayerId);
     this.localPlayer.team = meInRoom?.team || 'RED';
     this.localPlayer.color = this.localPlayer.team === 'BLUE' ? '#00A2FF' : '#FF3366';
 
-    // 20Hz Compact Delta Sync (Every 50ms - Smooth & Lightweight on slow networks)
+    // 20Hz Compact Delta Sync
     if (this.syncInterval) clearInterval(this.syncInterval);
     this.syncInterval = setInterval(() => {
       if (this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
@@ -705,7 +739,6 @@ class MultiplayerGameApp {
     }, 50);
   }
 
-  // ──────────────── DEAD-RECKONING REMOTE INTERPOLATION ────────────────
   handleRemotePlayerSync(data) {
     if (!this.remotePlayers.has(data.id)) {
       this.remotePlayers.set(data.id, {
@@ -771,11 +804,11 @@ class MultiplayerGameApp {
   }
 
   handleRemoteMine(mine) {
-    this.landmines.push({ ...mine, armTimer: 60, armed: false });
+    this.landmines.push({ ...mine, armTimer: 45, armed: false, stuck: false });
   }
 
-  handleRemoteSmoke(smoke) {
-    this.smokeClouds.push({ ...smoke, life: 450 });
+  handleRemoteToxicSmoke(smoke) {
+    this.toxicClouds.push({ ...smoke, life: 450 });
   }
 
   handleRemotePickupCollect(data) {
@@ -803,7 +836,6 @@ class MultiplayerGameApp {
       if (this.scoreBlueEl) this.scoreBlueEl.textContent = data.scores.BLUE || 0;
     }
 
-    // Mark remote player dead
     const rp = this.remotePlayers.get(data.victimId);
     if (rp) {
       rp.isDead = true;
@@ -834,7 +866,6 @@ class MultiplayerGameApp {
     this.localPlayer.isDead = true;
     this.localPlayer.hp = 0;
 
-    // Trigger local death explosion
     for (let i = 0; i < 24; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 3 + Math.random() * 8;
@@ -849,14 +880,12 @@ class MultiplayerGameApp {
       });
     }
 
-    // Send single death notification to server
     this.send('PLAYER_KILLED', {
       victimId: this.myPlayerId,
       killerId,
       weapon
     });
 
-    // Start 3-second respawn timer
     this.respawnTimer = 3;
     const countdown = setInterval(() => {
       this.respawnTimer--;
@@ -874,7 +903,7 @@ class MultiplayerGameApp {
     this.localPlayer.y = 800;
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
-    this.localPlayer.inventory = { grenades: 2, mines: 1, smoke: 1 };
+    this.localPlayer.inventory = { grenades: 2, mines: 1, toxic_gas: 1 };
     this.updateTacticalHUD();
 
     this.send('RESPAWN_REQUEST', {
@@ -883,7 +912,7 @@ class MultiplayerGameApp {
     });
   }
 
-  // ──────────────── SIMULATION & SEAMLESS CAMERA ────────────────
+  // ──────────────── SIMULATION LOOP ────────────────
   startRenderLoop() {
     let lastShootTime = 0;
 
@@ -925,7 +954,6 @@ class MultiplayerGameApp {
     const targetX = this.localPlayer.x - this.canvas.width / 2;
     const targetY = this.localPlayer.y - this.canvas.height / 2;
 
-    // Smooth, cinematic camera tracking
     this.camera.x += (targetX - this.camera.x) * 0.08;
     this.camera.y += (targetY - this.camera.y) * 0.08;
 
@@ -1003,7 +1031,7 @@ class MultiplayerGameApp {
       p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
-    // Dead-Reckoning Extrapolation for Remote Players
+    // Dead-Reckoning for Remote Players
     this.remotePlayers.forEach(rp => {
       if (!rp.isDead) {
         rp.targetX += rp.vx * 0.5;
@@ -1042,7 +1070,7 @@ class MultiplayerGameApp {
         continue;
       }
 
-      // Hit on Local Player
+      // Hit Local Player
       if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
         if (Math.hypot(b.x - p.x, b.y - p.y) < soldierRadius + 4) {
           const dmg = b.weapon === 'sniper' ? 70 : b.weapon === 'shotgun' ? 14 : b.weapon === 'rpg' ? 90 : 18;
@@ -1067,7 +1095,7 @@ class MultiplayerGameApp {
       }
     }
 
-    // Grenades
+    // ──────────────── GRENADES UPDATE ────────────────
     for (let i = this.grenades.length - 1; i >= 0; i--) {
       const g = this.grenades[i];
       g.vy += 0.42;
@@ -1103,25 +1131,92 @@ class MultiplayerGameApp {
       }
     }
 
-    // Landmines
+    // ──────────────── LANDMINES (STICKY GROUND & AIR IMPACT DETONATION) ────────────────
     for (let i = this.landmines.length - 1; i >= 0; i--) {
       const m = this.landmines[i];
-      if (!m.armed) {
-        m.armTimer--;
-        if (m.armTimer <= 0) m.armed = true;
-      } else {
-        if (m.team !== p.team && p.hp > 0 && !p.isDead && Math.hypot(m.x - p.x, m.y - p.y) < 45) {
+
+      if (!m.stuck) {
+        // Airborne physics
+        m.vy = (m.vy || 0) + 0.38;
+        m.x += (m.vx || 0);
+        m.y += m.vy;
+
+        // DIRECT BODY CONTACT IN AIR -> INSTANT DETONATION
+        if (m.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead && Math.hypot(m.x - p.x, m.y - p.y) < 28) {
           this.createExplosion(m.x, m.y, 90, 100, m.ownerId);
           this.landmines.splice(i, 1);
+          continue;
+        }
+
+        // Stick to ground floor
+        if (m.y >= gy - 6) {
+          m.y = gy - 6;
+          m.vx = 0;
+          m.vy = 0;
+          m.stuck = true;
+        }
+
+        // Stick to platforms
+        for (const plat of this.platforms) {
+          if (
+            m.x >= plat.x && m.x <= plat.x + plat.w &&
+            m.y >= plat.y - 6 && m.y <= plat.y + 14
+          ) {
+            m.y = plat.y - 6;
+            m.vx = 0;
+            m.vy = 0;
+            m.stuck = true;
+            break;
+          }
+        }
+      } else {
+        // Sticked on ground -> Arming & Triggering
+        if (!m.armed) {
+          m.armTimer--;
+          if (m.armTimer <= 0) m.armed = true;
+        } else {
+          // Armed proximity trigger
+          if (m.team !== p.team && p.hp > 0 && !p.isDead && Math.hypot(m.x - p.x, m.y - p.y) < 45) {
+            this.createExplosion(m.x, m.y, 90, 100, m.ownerId);
+            this.landmines.splice(i, 1);
+          }
         }
       }
     }
 
-    // Smoke
-    for (let i = this.smokeClouds.length - 1; i >= 0; i--) {
-      const s = this.smokeClouds[i];
+    // ──────────────── YELLOW TOXIC GAS (CONTINUOUS HP DRAIN) ────────────────
+    this.toxicDamageTick++;
+    for (let i = this.toxicClouds.length - 1; i >= 0; i--) {
+      const s = this.toxicClouds[i];
       s.life--;
-      if (s.life <= 0) this.smokeClouds.splice(i, 1);
+
+      // Spawn ambient toxic particles
+      if (Math.random() < 0.4) {
+        this.particles.push({
+          x: s.x + (Math.random() - 0.5) * s.radius * 1.5,
+          y: s.y + (Math.random() - 0.5) * s.radius * 1.2,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: -0.5 - Math.random() * 1.0,
+          color: Math.random() > 0.4 ? '#FFE500' : '#88DD00',
+          alpha: 0.8,
+          radius: 6 + Math.random() * 8
+        });
+      }
+
+      // HP Drain on Local Player inside toxic cloud
+      if (p.hp > 0 && !p.isDead && Math.hypot(p.x - s.x, p.y - s.y) < s.radius + 15) {
+        if (this.toxicDamageTick % 18 === 0) {
+          const toxicDmg = 3;
+          p.hp = Math.max(0, p.hp - toxicDmg);
+          this.addPickupNotification('-3 HP (☣️ TOXIC GAS)', '#FFE500');
+
+          if (p.hp <= 0) {
+            this.triggerLocalDeath(s.ownerId || 'TOXIC', 'TOXIC_GAS');
+          }
+        }
+      }
+
+      if (s.life <= 0) this.toxicClouds.splice(i, 1);
     }
 
     // Particles
@@ -1140,7 +1235,7 @@ class MultiplayerGameApp {
 
         if (pk.type === 'GRENADE') { p.inventory.grenades = Math.min(4, p.inventory.grenades + 2); this.addPickupNotification('+2 FRAG GRENADES', '#00E676'); }
         else if (pk.type === 'MINE') { p.inventory.mines = Math.min(3, p.inventory.mines + 1); this.addPickupNotification('+1 PROXIMITY MINE', '#FF3366'); }
-        else if (pk.type === 'SMOKE') { p.inventory.smoke = Math.min(3, p.inventory.smoke + 1); this.addPickupNotification('+1 SMOKE GRENADE', '#00E5FF'); }
+        else if (pk.type === 'TOXIC_GAS') { p.inventory.toxic_gas = Math.min(3, p.inventory.toxic_gas + 1); this.addPickupNotification('+1 TOXIC GAS BOMB', '#FFE500'); }
         else if (pk.type === 'MEDKIT') { p.hp = Math.min(100, p.hp + 50); this.addPickupNotification('+50 HEALTH RESTORED', '#00E676'); }
 
         this.updateTacticalHUD();
@@ -1148,7 +1243,7 @@ class MultiplayerGameApp {
       }
     }
 
-    // Manual [F] Gun Prompt
+    // Manual [E] Gun Prompt
     this.nearbyGun = null;
     let closestDist = 52;
 
@@ -1227,7 +1322,6 @@ class MultiplayerGameApp {
     }
   }
 
-  // ──────────────── BATCHED LOW-BANDWIDTH WEAPON FIRING ────────────────
   fireWeapon() {
     const p = this.localPlayer;
     const wep = this.currentWeapon;
@@ -1245,7 +1339,6 @@ class MultiplayerGameApp {
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
     } else if (wep === 'shotgun') {
-      // Send single batched array packet for all 6 pellets
       const burst = [];
       for (let i = 0; i < 6; i++) {
         const spread = (Math.random() - 0.5) * 0.35;
@@ -1313,7 +1406,7 @@ class MultiplayerGameApp {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Stable Distant Mountain Backdrop
+    // 1. Stable Mountain Backdrop
     if (this.assets.loaded && this.assets.bg.complete) {
       const bg = this.assets.bg;
 
@@ -1343,7 +1436,7 @@ class MultiplayerGameApp {
     ctx.save();
     ctx.translate(-camX, -camY);
 
-    // 2. Draw Natural Terrain
+    // 2. Natural Terrain
     for (const plat of this.platforms) {
       if (plat.type === 'GROUND') {
         ctx.fillStyle = '#2C1B10';
@@ -1414,35 +1507,43 @@ class MultiplayerGameApp {
     ctx.fillText('🏛️ RAREST WEAPON VAULT', 1800, 915);
     ctx.restore();
 
-    // 3. Draw Tactical Pickups
+    // 3. Tactical Pickups
     for (const pk of this.tacticalPickups) {
       if (pk.available) this.drawTacticalPickup(ctx, pk);
     }
 
-    // 4. Draw Dropped Guns
+    // 4. Dropped Guns
     for (const gun of this.groundGuns) {
       if (gun.available) this.drawGroundGun(ctx, gun);
     }
 
-    // 5. Draw Smoke Clouds
-    for (const s of this.smokeClouds) {
+    // 5. Yellow Toxic Gas Clouds
+    for (const s of this.toxicClouds) {
       ctx.save();
-      const alpha = Math.min(0.65, s.life / 200);
-      ctx.fillStyle = `rgba(170, 185, 205, ${alpha})`;
-      ctx.shadowBlur = 25;
-      ctx.shadowColor = 'rgba(170, 185, 205, 0.5)';
+      const alpha = Math.min(0.7, s.life / 180);
+      const grad = ctx.createRadialGradient(s.x, s.y, 10, s.x, s.y, s.radius);
+      grad.addColorStop(0, `rgba(255, 230, 0, ${alpha * 0.9})`);
+      grad.addColorStop(0.6, `rgba(200, 220, 0, ${alpha * 0.6})`);
+      grad.addColorStop(1, `rgba(100, 180, 0, 0)`);
+      ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
       ctx.fill();
+
+      // Biohazard Icon in Toxic Core
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+      ctx.textAlign = 'center';
+      ctx.fillText('☣️', s.x, s.y + 6);
       ctx.restore();
     }
 
-    // 6. Draw Landmines
+    // 6. Sticky Landmines
     for (const m of this.landmines) {
       ctx.save();
       ctx.translate(m.x, m.y);
       ctx.fillStyle = m.armed ? '#FF3366' : '#FFD600';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 12;
       ctx.shadowColor = m.armed ? '#FF3366' : '#FFD600';
       ctx.beginPath();
       ctx.arc(0, 0, 8, 0, Math.PI * 2);
@@ -1450,10 +1551,16 @@ class MultiplayerGameApp {
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      // Pulsing LED Core
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
-    // 7. Draw Frag Grenades
+    // 7. Frag Grenades
     for (const g of this.grenades) {
       ctx.save();
       ctx.translate(g.x, g.y);
@@ -1466,7 +1573,7 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 8. Draw Particles
+    // 8. Particles
     for (const pt of this.particles) {
       ctx.save();
       ctx.globalAlpha = pt.alpha;
@@ -1477,7 +1584,7 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 9. Draw Bullets & Rockets
+    // 9. Bullets & Rockets
     for (const b of this.bullets) {
       ctx.save();
       if (b.weapon === 'rpg') {
@@ -1502,18 +1609,17 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 10. Draw Remote Soldiers
+    // 10. Remote Soldiers
     this.remotePlayers.forEach(rp => {
       if (!rp.isDead && rp.hp > 0) {
         this.drawArticulatedSoldier(ctx, rp, false, rp.walkCycle || 0, 0);
       }
     });
 
-    // 11. Draw Local Soldier
+    // 11. Local Soldier
     if (!this.localPlayer.isDead && this.localPlayer.hp > 0) {
       this.drawArticulatedSoldier(ctx, this.localPlayer, true, this.walkCycle, this.recoilOffset);
     } else if (this.localPlayer.isDead) {
-      // Draw Respawn Countdown Tag
       ctx.save();
       ctx.font = 'bold 16px "Chakra Petch", sans-serif';
       ctx.fillStyle = '#FF3366';
@@ -1524,7 +1630,7 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 12. Draw Floating Notifications
+    // 12. Floating Notifications
     for (const notif of this.pickupNotifications) {
       ctx.save();
       ctx.globalAlpha = notif.alpha;
@@ -1538,6 +1644,50 @@ class MultiplayerGameApp {
     }
 
     ctx.restore(); // END WORLD SPACE
+
+    // ──────────────── SCREEN SPACE: TACTICAL GAME CROSSHAIR ────────────────
+    this.drawTacticalCrosshair(ctx, this.mouse.x, this.mouse.y);
+  }
+
+  // ──────────────── TACTICAL CROSSHAIR DRAWING ────────────────
+  drawTacticalCrosshair(ctx, mx, my) {
+    if (mx <= 0 && my <= 0) return;
+
+    ctx.save();
+    ctx.translate(mx, my);
+
+    // Outer Circle Ring
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#00E5FF';
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 4 Precision Cross Lines
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(0, -18); ctx.lineTo(0, -8);
+    // Bottom
+    ctx.moveTo(0, 8); ctx.lineTo(0, 18);
+    // Left
+    ctx.moveTo(-18, 0); ctx.lineTo(-8, 0);
+    // Right
+    ctx.moveTo(8, 0); ctx.lineTo(18, 0);
+    ctx.stroke();
+
+    // Center Red Target Dot
+    ctx.fillStyle = '#FF3366';
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#FF3366';
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 
   drawGroundGun(ctx, gun) {
@@ -1596,6 +1746,7 @@ class MultiplayerGameApp {
     }
     ctx.restore();
 
+    // [E] Equip Prompt in World Space
     if (isNearby) {
       ctx.save();
       ctx.translate(0, -34 + bob);
@@ -1612,7 +1763,7 @@ class MultiplayerGameApp {
       ctx.font = 'bold 10px "Chakra Petch", sans-serif';
       ctx.fillStyle = '#FFD600';
       ctx.textAlign = 'center';
-      ctx.fillText(`[F] EQUIP ${gun.name.split(' ')[0]}`, 0, 4);
+      ctx.fillText(`[E] EQUIP ${gun.name.split(' ')[0]}`, 0, 4);
       ctx.restore();
     } else {
       ctx.font = 'bold 9px "Chakra Petch", sans-serif';
@@ -1630,7 +1781,7 @@ class MultiplayerGameApp {
 
     const time = performance.now() * 0.003;
     const bob = Math.sin(time * 2) * 4;
-    const glowColor = pk.type === 'MEDKIT' ? '#00E676' : '#FFD600';
+    const glowColor = pk.type === 'MEDKIT' ? '#00E676' : pk.type === 'TOXIC_GAS' ? '#FFE500' : '#FFD600';
 
     ctx.save();
     ctx.translate(0, bob);
@@ -1657,11 +1808,14 @@ class MultiplayerGameApp {
       ctx.beginPath();
       ctx.arc(0, 0, 5, 0, Math.PI * 2);
       ctx.fill();
-    } else if (pk.type === 'SMOKE') {
-      ctx.fillStyle = '#4A5568';
+    } else if (pk.type === 'TOXIC_GAS') {
+      ctx.fillStyle = '#4A5520';
       ctx.fillRect(-7, -12, 14, 22);
-      ctx.fillStyle = '#00E5FF';
+      ctx.fillStyle = '#FFE500';
       ctx.fillRect(-7, -3, 14, 5);
+      ctx.font = 'bold 8px sans-serif';
+      ctx.fillStyle = '#000';
+      ctx.fillText('☣️', -4, -4);
     } else if (pk.type === 'MEDKIT') {
       ctx.fillStyle = '#1F2430';
       ctx.fillRect(-13, -11, 26, 20);
