@@ -1154,27 +1154,35 @@ class MultiplayerGameApp {
     p.x += p.vx;
     p.y += p.vy;
 
-    // ──────────────── WORLD BOUNDARIES ────────────────
+    // ──────────────── WORLD BOUNDARIES & ORGANIC TERRAIN LANDING ────────────────
     const soldierRadius = 22;
-    const gy = this.groundY;
+    const curGroundY = this.getGroundYAt(p.x);
 
     if (p.x - soldierRadius < 10) { p.x = 10 + soldierRadius; p.vx = 0; }
     if (p.x + soldierRadius > this.worldWidth - 10) { p.x = this.worldWidth - 10 - soldierRadius; p.vx = 0; }
     if (p.y - soldierRadius < 15) { p.y = 15 + soldierRadius; p.vy = 0; }
-    if (p.y + soldierRadius > gy) { p.y = gy - soldierRadius; p.vy = 0; p.isGrounded = true; }
 
-    p.isGrounded = p.y + soldierRadius >= gy - 2;
+    // Organic Ground Landing
+    if (p.y + soldierRadius > curGroundY) {
+      p.y = curGroundY - soldierRadius;
+      p.vy = 0;
+      p.isGrounded = true;
+    } else {
+      p.isGrounded = p.y + soldierRadius >= curGroundY - 3;
+    }
+
+    // Organic Sloped Platforms Landing
     for (const plat of this.platforms) {
-      if (
-        p.x + soldierRadius > plat.x &&
-        p.x - soldierRadius < plat.x + plat.w &&
-        p.y + soldierRadius >= plat.y &&
-        p.y + soldierRadius <= plat.y + 24 &&
-        p.vy >= 0
-      ) {
-        p.y = plat.y - soldierRadius;
-        p.vy = 0;
-        p.isGrounded = true;
+      if (plat.type !== 'GROUND') {
+        if (p.x + soldierRadius > plat.x && p.x - soldierRadius < plat.x + plat.w) {
+          const topY = this.getPlatformTopY(plat, p.x);
+          const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
+          if (p.y + soldierRadius >= topY && p.y + soldierRadius <= topY + 28 && p.vy >= 0) {
+            p.y = topY - soldierRadius;
+            p.vy = 0;
+            p.isGrounded = true;
+          }
+        }
       }
     }
 
@@ -1191,8 +1199,9 @@ class MultiplayerGameApp {
       if (!rp.isDead) {
         rp.targetX += rp.vx * 0.5;
         rp.targetY += rp.vy * 0.5;
+        const rpGroundY = this.getGroundYAt(rp.targetX);
         rp.targetX = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.targetX));
-        rp.targetY = Math.max(soldierRadius + 15, Math.min(gy - soldierRadius, rp.targetY));
+        rp.targetY = Math.max(soldierRadius + 15, Math.min(rpGroundY - soldierRadius, rp.targetY));
         rp.x += (rp.targetX - rp.x) * 0.28;
         rp.y += (rp.targetY - rp.y) * 0.28;
       }
@@ -1206,21 +1215,29 @@ class MultiplayerGameApp {
       b.life++;
 
       let hitPlatform = false;
-      for (const plat of this.platforms) {
-        if (
-          b.x >= plat.x && b.x <= plat.x + plat.w &&
-          b.y >= plat.y && b.y <= plat.y + plat.h
-        ) {
-          hitPlatform = true;
-          this.spawnImpactSparks(b.x, b.y, b.color);
-          if (b.weapon === 'rpg') {
-            this.createExplosion(b.x, b.y, 95, 95, b.ownerId);
+      const bGroundY = this.getGroundYAt(b.x);
+      if (b.y >= bGroundY) {
+        hitPlatform = true;
+      }
+
+      if (!hitPlatform) {
+        for (const plat of this.platforms) {
+          if (plat.type !== 'GROUND' && b.x >= plat.x && b.x <= plat.x + plat.w) {
+            const topY = this.getPlatformTopY(plat, b.x);
+            const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
+            if (b.y >= topY && b.y <= botY) {
+              hitPlatform = true;
+              break;
+            }
           }
-          break;
         }
       }
 
       if (hitPlatform) {
+        this.spawnImpactSparks(b.x, b.y, b.color);
+        if (b.weapon === 'rpg') {
+          this.createExplosion(b.x, b.y, 95, 95, b.ownerId);
+        }
         this.bullets.splice(i, 1);
         continue;
       }
@@ -1245,7 +1262,7 @@ class MultiplayerGameApp {
         }
       }
 
-      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > gy || b.life > 75) {
+      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > bGroundY || b.life > 75) {
         this.bullets.splice(i, 1);
       }
     }
@@ -1258,25 +1275,28 @@ class MultiplayerGameApp {
       g.y += g.vy;
       g.fuse--;
 
+      const gGroundY = this.getGroundYAt(g.x);
+
       if (g.x < 15 || g.x > this.worldWidth - 15) {
         g.vx = -g.vx * 0.7;
         g.x = Math.max(15, Math.min(this.worldWidth - 15, g.x));
       }
-      if (g.y >= gy - 8) {
-        g.y = gy - 8;
+      if (g.y >= gGroundY - 8) {
+        g.y = gGroundY - 8;
         g.vy = -g.vy * 0.55;
         g.vx *= 0.75;
       }
 
       for (const plat of this.platforms) {
-        if (
-          g.x >= plat.x && g.x <= plat.x + plat.w &&
-          g.y >= plat.y && g.y <= plat.y + plat.h
-        ) {
-          g.y = plat.y - 6;
-          g.vy = -g.vy * 0.5;
-          g.vx *= 0.75;
-          break;
+        if (plat.type !== 'GROUND' && g.x >= plat.x && g.x <= plat.x + plat.w) {
+          const topY = this.getPlatformTopY(plat, g.x);
+          const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
+          if (g.y >= topY - 6 && g.y <= botY) {
+            g.y = topY - 6;
+            g.vy = -g.vy * 0.5;
+            g.vx *= 0.75;
+            break;
+          }
         }
       }
 
@@ -2174,96 +2194,123 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // 4. Natural Rock Platform (Authentic Hand-Drawn Earthy Stones & Cartoon Grass)
+  // 4. Natural Organic Rock Platform (Authentic Hand-Drawn Earthy Stones, Curved Bowl Underside & Cartoon Grass)
   drawRockPlatform(ctx, plat) {
     ctx.save();
 
-    // A. Drop Shadow Beneath Platform
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    const numSamples = 24;
+    const stepX = plat.w / numSamples;
+
+    // A. Build Organic Polygon Contour
     ctx.beginPath();
-    ctx.roundRect(plat.x + 4, plat.y + plat.h, plat.w - 8, 14, 6);
-    ctx.fill();
-
-    // B. Earthy Rock Stone Polygon Body
-    const rockGrad = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.h);
-    rockGrad.addColorStop(0, '#948472');
-    rockGrad.addColorStop(0.4, '#7D6E5D');
-    rockGrad.addColorStop(1, '#5E5042');
-
-    ctx.fillStyle = rockGrad;
-    ctx.beginPath();
-    ctx.roundRect(plat.x, plat.y, plat.w, plat.h, 6);
-    ctx.fill();
-
-    // C. Stone Fissure & Crack Lines
-    ctx.strokeStyle = '#3E342B';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(plat.x + plat.w * 0.25, plat.y + 10);
-    ctx.lineTo(plat.x + plat.w * 0.28, plat.y + 22);
-    ctx.lineTo(plat.x + plat.w * 0.35, plat.y + 28);
-    ctx.moveTo(plat.x + plat.w * 0.68, plat.y + 8);
-    ctx.lineTo(plat.x + plat.w * 0.72, plat.y + 24);
-    ctx.stroke();
-
-    // D. Embedded Rounded River Stones / Pebbles (Along Bottom & Sides)
-    const pebbleOffsets = [
-      { x: 12, y: plat.h - 4, r: 8 },
-      { x: 34, y: plat.h - 2, r: 6 },
-      { x: 62, y: plat.h - 5, r: 9 },
-      { x: plat.w * 0.45, y: plat.h - 3, r: 7 },
-      { x: plat.w * 0.60, y: plat.h - 5, r: 9 },
-      { x: plat.w * 0.78, y: plat.h - 3, r: 7 },
-      { x: plat.w - 38, y: plat.h - 4, r: 8 },
-      { x: plat.w - 14, y: plat.h - 2, r: 6 }
-    ];
-
-    for (const p of pebbleOffsets) {
-      if (p.x < plat.w) {
-        ctx.fillStyle = '#B5A593';
-        ctx.beginPath();
-        ctx.arc(plat.x + p.x, plat.y + p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Shaded Rim
-        ctx.fillStyle = '#6E5F50';
-        ctx.beginPath();
-        ctx.arc(plat.x + p.x + 1.5, plat.y + p.y + 1.5, p.r * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = '#2A2219';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.arc(plat.x + p.x, plat.y + p.y, p.r, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+    // Top Sloped/Curved Surface Points
+    for (let i = 0; i <= numSamples; i++) {
+      const px = plat.x + i * stepX;
+      const py = this.getPlatformTopY(plat, px);
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
     }
 
-    // E. Heavy Black Cartoon Contour Outline
-    ctx.strokeStyle = '#2A2219';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.roundRect(plat.x, plat.y, plat.w, plat.h, 6);
+    // Bottom Organic Rounded Bowl Underside Points
+    for (let i = numSamples; i >= 0; i--) {
+      const px = plat.x + i * stepX;
+      const progress = i / numSamples;
+      const bowlDrop = Math.sin(progress * Math.PI) * 35 + Math.sin(progress * 10) * 6;
+      const py = plat.y + plat.h + bowlDrop;
+      ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    // B. Drop Shadow Beneath Organic Island
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = '#6E5F50';
+    ctx.fill();
+    ctx.restore();
+
+    // C. Earthy Rock Stone Polygon Body (Gradient Fill)
+    const rockGrad = ctx.createLinearGradient(0, plat.y - 20, 0, plat.y + plat.h + 40);
+    rockGrad.addColorStop(0, '#948472');
+    rockGrad.addColorStop(0.35, '#7D6E5D');
+    rockGrad.addColorStop(0.8, '#5E5042');
+    rockGrad.addColorStop(1, '#4A3D31');
+
+    ctx.fillStyle = rockGrad;
+    ctx.fill();
+
+    // D. Heavy Black Cartoon Contour Outline
+    ctx.strokeStyle = '#241C15';
+    ctx.lineWidth = 3;
     ctx.stroke();
 
-    // F. Thick Vibrant Multi-Layered Cartoon Grass on Top
+    // E. Stone Fissure & Crack Lines on the Rock Face
+    ctx.strokeStyle = '#382E25';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    const midX = plat.x + plat.w * 0.45;
+    const midTopY = this.getPlatformTopY(plat, midX);
+    ctx.moveTo(midX - 30, midTopY + 14);
+    ctx.lineTo(midX - 15, midTopY + 32);
+    ctx.lineTo(midX + 10, midTopY + 48);
+
+    const rightX = plat.x + plat.w * 0.72;
+    const rightTopY = this.getPlatformTopY(plat, rightX);
+    ctx.moveTo(rightX, rightTopY + 12);
+    ctx.lineTo(rightX + 18, rightTopY + 34);
+    ctx.stroke();
+
+    // F. Embedded Rounded River Stones / Pebbles (Scattered Along Curved Bottom & Sides)
+    const numPebbles = 16;
+    for (let i = 0; i <= numPebbles; i++) {
+      const progress = i / numPebbles;
+      const px = plat.x + progress * plat.w;
+      const bowlDrop = Math.sin(progress * Math.PI) * 35 + Math.sin(progress * 10) * 6;
+      const py = plat.y + plat.h + bowlDrop - 2;
+      const pr = 5 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 6;
+
+      ctx.fillStyle = '#B5A593';
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pebble Shadow Rim
+      ctx.fillStyle = '#6E5F50';
+      ctx.beginPath();
+      ctx.arc(px + 1.2, py + 1.2, pr * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pebble Black Outline
+      ctx.strokeStyle = '#241C15';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // G. Multi-Layered Pointed Cartoon Grass on Top Sloped Ridge
     // Layer 1: Dark Green Under-Shadow Grass
     ctx.fillStyle = '#33691E';
-    for (let gx = plat.x; gx <= plat.x + plat.w - 6; gx += 10) {
+    for (let i = 0; i < numSamples; i++) {
+      const px = plat.x + i * stepX;
+      const py = this.getPlatformTopY(plat, px);
       ctx.beginPath();
-      ctx.moveTo(gx, plat.y + 2);
-      ctx.lineTo(gx + 4, plat.y - 8);
-      ctx.lineTo(gx + 8, plat.y + 2);
+      ctx.moveTo(px, py + 2);
+      ctx.lineTo(px + 5, py - 9);
+      ctx.lineTo(px + 10, py + 2);
       ctx.fill();
     }
 
-    // Layer 2: Bright Vibrant Lime Grass Blades with Black Outline
+    // Layer 2: Bright Vibrant Lime Grass Blades with Comic Dark Outlines
     ctx.fillStyle = '#7CB342';
-    for (let gx = plat.x; gx <= plat.x + plat.w - 8; gx += 12) {
+    for (let i = 0; i < numSamples; i++) {
+      const px = plat.x + i * stepX + 3;
+      const py = this.getPlatformTopY(plat, px);
       ctx.beginPath();
-      ctx.moveTo(gx, plat.y);
-      ctx.lineTo(gx + 5, plat.y - 10);
-      ctx.lineTo(gx + 10, plat.y);
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + 6, py - 12);
+      ctx.lineTo(px + 12, py);
       ctx.fill();
 
       ctx.strokeStyle = '#1B5E20';
@@ -2271,56 +2318,139 @@ class MultiplayerGameApp {
       ctx.stroke();
     }
 
+    // H. Tropical Palm / Fern Bush Plant on Island Crest
+    if (plat.hasPalm) {
+      const palmX = plat.x + plat.w * 0.48;
+      const palmY = this.getPlatformTopY(plat, palmX);
+      this.drawTropicalPalmBush(ctx, palmX, palmY);
+    }
+
     ctx.restore();
   }
 
-  // 5. Natural Ground Terrain (Deep Subterranean Earth & Continuous Top Grass)
+  // Helper: Draw Tropical Comic Palm/Fern Plant on Islands (Matching Reference Screenshot)
+  drawTropicalPalmBush(ctx, px, py) {
+    ctx.save();
+    ctx.translate(px, py - 2);
+
+    const fronds = [
+      { angle: -2.3, len: 32, w: 12 },
+      { angle: -1.8, len: 38, w: 14 },
+      { angle: -1.3, len: 42, w: 16 },
+      { angle: -0.8, len: 38, w: 14 },
+      { angle: -0.3, len: 32, w: 12 }
+    ];
+
+    for (const f of fronds) {
+      ctx.save();
+      ctx.rotate(f.angle + Math.PI / 2);
+
+      // Frond Leaf Gradient
+      const leafGrad = ctx.createLinearGradient(0, 0, 0, -f.len);
+      leafGrad.addColorStop(0, '#2E7D32');
+      leafGrad.addColorStop(0.5, '#4CAF50');
+      leafGrad.addColorStop(1, '#81C784');
+
+      ctx.fillStyle = leafGrad;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-f.w / 2, -f.len / 2, 0, -f.len);
+      ctx.quadraticCurveTo(f.w / 2, -f.len / 2, 0, 0);
+      ctx.fill();
+
+      // Leaf Central Rib Spine
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -f.len);
+      ctx.stroke();
+
+      // Cartoon Outline
+      ctx.strokeStyle = '#1F130B';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-f.w / 2, -f.len / 2, 0, -f.len);
+      ctx.quadraticCurveTo(f.w / 2, -f.len / 2, 0, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // 5. Natural Ground Terrain (Deep Subterranean Earth, Rolling Hills & Continuous Top Grass)
   drawGroundTerrain(ctx, plat) {
     ctx.save();
 
-    // A. Subterranean Soil Strata Layers
-    // Layer 1: Deep Bedrock
-    ctx.fillStyle = '#211007';
-    ctx.fillRect(plat.x, plat.y + 45, plat.w, plat.h - 45);
+    const stepX = 18;
+    const totalSamples = Math.ceil(this.worldWidth / stepX);
+    const bottomY = plat.y + plat.h + 200;
 
-    // Layer 2: Rich Mid Soil
-    ctx.fillStyle = '#321C0E';
-    ctx.fillRect(plat.x, plat.y + 18, plat.w, 28);
+    // A. Build Organic Ground Polygon
+    ctx.beginPath();
+    ctx.moveTo(0, this.getGroundYAt(0));
 
-    // Layer 3: Top Organic Humus Layer
-    ctx.fillStyle = '#4A2E19';
-    ctx.fillRect(plat.x, plat.y, plat.w, 18);
+    for (let i = 0; i <= totalSamples; i++) {
+      const gx = Math.min(this.worldWidth, i * stepX);
+      const gy = this.getGroundYAt(gx);
+      ctx.lineTo(gx, gy);
+    }
 
-    // B. Embedded Rock Strata & Mineral Pebbles in Soil
+    ctx.lineTo(this.worldWidth, bottomY);
+    ctx.lineTo(0, bottomY);
+    ctx.closePath();
+
+    // B. Subterranean Deep Soil Strata Fill
+    const earthGrad = ctx.createLinearGradient(0, plat.y - 40, 0, bottomY);
+    earthGrad.addColorStop(0, '#5D4037');
+    earthGrad.addColorStop(0.2, '#4E342E');
+    earthGrad.addColorStop(0.5, '#3E2723');
+    earthGrad.addColorStop(1, '#211007');
+
+    ctx.fillStyle = earthGrad;
+    ctx.fill();
+
+    // Heavy Black Ground Outline
+    ctx.strokeStyle = '#241C15';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // C. Embedded Rock Chunks in Underground Earth
     ctx.fillStyle = '#7D6E5D';
-    for (let sx = 0; sx < plat.w; sx += 85) {
+    for (let sx = 40; sx < this.worldWidth; sx += 90) {
+      const topY = this.getGroundYAt(sx);
       ctx.beginPath();
-      ctx.arc(plat.x + sx + 25, plat.y + 35, 7, 0, Math.PI * 2);
-      ctx.arc(plat.x + sx + 65, plat.y + 65, 9, 0, Math.PI * 2);
+      ctx.arc(sx + 20, topY + 38, 8, 0, Math.PI * 2);
+      ctx.arc(sx + 60, topY + 72, 11, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#211007';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#241C15';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
     }
 
-    // C. Continuous Stylized Cartoon Grass Along Ground Ridge
-    // Dark base grass
+    // D. Continuous Stylized Cartoon Grass Following the Rolling Slopes
+    // Layer 1: Dark green base tufts
     ctx.fillStyle = '#33691E';
-    for (let gx = 0; gx < plat.w; gx += 8) {
+    for (let gx = 0; gx < this.worldWidth; gx += 10) {
+      const gy = this.getGroundYAt(gx);
       ctx.beginPath();
-      ctx.moveTo(plat.x + gx, plat.y);
-      ctx.lineTo(plat.x + gx + 3, plat.y - 7);
-      ctx.lineTo(plat.x + gx + 7, plat.y);
+      ctx.moveTo(gx, gy + 2);
+      ctx.lineTo(gx + 4, gy - 8);
+      ctx.lineTo(gx + 8, gy + 2);
       ctx.fill();
     }
 
-    // Bright primary grass blades
+    // Layer 2: Bright lime primary grass blades with comic inking
     ctx.fillStyle = '#689F38';
-    for (let gx = 0; gx < plat.w; gx += 11) {
+    for (let gx = 0; gx < this.worldWidth; gx += 12) {
+      const gy = this.getGroundYAt(gx);
       ctx.beginPath();
-      ctx.moveTo(plat.x + gx, plat.y);
-      ctx.lineTo(plat.x + gx + 4, plat.y - 11);
-      ctx.lineTo(plat.x + gx + 9, plat.y);
+      ctx.moveTo(gx, gy);
+      ctx.lineTo(gx + 5, gy - 11);
+      ctx.lineTo(gx + 10, gy);
       ctx.fill();
 
       ctx.strokeStyle = '#1B5E20';
