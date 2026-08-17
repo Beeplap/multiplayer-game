@@ -511,7 +511,7 @@ input[type="text"]:focus {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 150px;
+  width: 160px;
 }
 
 .player-stat-bar {
@@ -617,10 +617,61 @@ input[type="text"]:focus {
   color: var(--accent-cyan);
 }
 
+/* Weapon Arsenal Switcher Bar */
+.weapon-arsenal-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  background: rgba(12, 16, 26, 0.88);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(10px);
+  padding: 4px 8px;
+  border-radius: 12px;
+  z-index: 20;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+}
+
+.weapon-select-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.weapon-select-btn.active {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+
+.wep-key {
+  font-size: 9px;
+  font-weight: 900;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--accent-gold);
+}
+
+.wep-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 /* Tactical Action Bar (Finite Consumables) */
 .tactical-action-bar {
   position: absolute;
-  bottom: 120px;
+  bottom: 100px;
   right: 16px;
   display: flex;
   flex-direction: column;
