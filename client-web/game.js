@@ -141,6 +141,26 @@ class MultiplayerGameApp {
     }
   }
 
+  getHumanServerName() {
+    const host = (window.location.hostname || '').toLowerCase();
+    if (!host || host === 'localhost' || host === '127.0.0.1') {
+      return 'LOCALHOST';
+    }
+    if (host.includes('trycloudflare.com') || host.includes('cloudflare')) {
+      return 'CLOUDFLARE NETWORK';
+    }
+    if (host.includes('onrender.com') || host.includes('render')) {
+      return 'RENDER CLOUD';
+    }
+    if (host.includes('loca.lt') || host.includes('localtunnel')) {
+      return 'LOCALTUNNEL';
+    }
+    if (host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.')) {
+      return `LOCAL WI-FI (${host})`;
+    }
+    return host.toUpperCase();
+  }
+
   initWebSocket() {
     const wsUrl = this.getAutoServerUrl();
 
@@ -155,8 +175,9 @@ class MultiplayerGameApp {
         console.log('⚡ Connected to Game Server:', wsUrl);
         if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot online';
         if (this.serverAddressTextEl) {
-          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          this.serverAddressTextEl.textContent = isLocal ? 'ONLINE • LOCALHOST ARENA' : 'ONLINE • READY FOR BATTLE';
+          const serverName = this.getHumanServerName();
+          this.serverAddressTextEl.textContent = `${serverName} • ONLINE`;
+          this.serverAddressTextEl.title = `WebSocket Endpoint: ${wsUrl}`;
         }
 
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
