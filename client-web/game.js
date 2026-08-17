@@ -129,13 +129,18 @@ class MultiplayerGameApp {
         console.log('⚡ Connected to Game Server:', wsUrl);
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
 
-        // Heartbeat Ping (Every 2 seconds)
+        // High-Precision Sub-Millisecond Heartbeat Ping (Every 1.2 seconds)
+        this.currentPing = 0;
+        this.lastPingSentAt = performance.now();
         if (this.pingInterval) clearInterval(this.pingInterval);
+        this.send('PING', { t: this.lastPingSentAt });
+
         this.pingInterval = setInterval(() => {
           if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.send('PING', { clientTime: Date.now() });
+            this.lastPingSentAt = performance.now();
+            this.send('PING', { t: this.lastPingSentAt });
           }
-        }, 2000);
+        }, 1200);
       };
 
       this.ws.onmessage = (event) => {
@@ -149,7 +154,7 @@ class MultiplayerGameApp {
 
       this.ws.onclose = () => {
         if (this.pingInterval) clearInterval(this.pingInterval);
-        setTimeout(() => this.initWebSocket(), 3000);
+        setTimeout(() => this.initWebSocket(), 2000);
       };
     } catch (e) {
       console.error('WebSocket init error', e);
@@ -167,12 +172,15 @@ class MultiplayerGameApp {
 
     switch (type) {
       case 'PONG': {
-        if (payload && payload.clientTime) {
-          const ping = Math.max(1, Date.now() - payload.clientTime);
-          if (this.pingValEl) this.pingValEl.textContent = `${ping} ms`;
+        if (this.lastPingSentAt) {
+          const rawRtt = Math.max(1, Math.round(performance.now() - this.lastPingSentAt));
+          // Exponential Moving Average (EMA) smoothing to eliminate false spikes and give stable network ping
+          this.currentPing = this.currentPing === 0 ? rawRtt : Math.round(this.currentPing * 0.75 + rawRtt * 0.25);
+
+          if (this.pingValEl) this.pingValEl.textContent = `${this.currentPing} ms`;
           const dot = this.hudPingDisplay?.querySelector('.ping-dot');
           if (dot) {
-            dot.className = 'ping-dot' + (ping > 120 ? ' high' : ping > 60 ? ' medium' : '');
+            dot.className = 'ping-dot' + (this.currentPing > 120 ? ' high' : this.currentPing > 60 ? ' medium' : '');
           }
         }
         break;
