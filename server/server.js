@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — High-Performance Low-Latency Game Server with Rate-Limiting & Authoritative Security
+// 🎮 WEGETHER — High-Performance Low-Latency Multiplayer Game Server with Rate-Limiting & Authoritative Security
 
 const express = require('express');
 const http = require('http');
@@ -568,7 +568,7 @@ const localIp = getLocalLanIp();
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
-  console.log(`🚀 MINI MILITIA 2D HIGH-PERFORMANCE SERVER`);
+  console.log(`🚀 WEGETHER — 2D MULTIPLAYER TACTICAL SERVER`);
   console.log(`💻 Localhost URL:    http://localhost:${PORT}`);
   console.log(`📱 LAN / Wi-Fi URL:  http://${localIp}:${PORT}  (⚡ 1-5ms Ping!)`);
   console.log(`🛡️ TCP NoDelay & Sub-Millisecond Heartbeat Active`);

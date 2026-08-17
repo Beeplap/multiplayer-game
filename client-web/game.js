@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — Tactical Combat with Yellow Toxic Gas, Sticky Landmines & Crosshair
+// 🎮 WEGETHER — 2D Tactical Combat with Yellow Toxic Gas, Sticky Landmines & Crosshair
 
 class MultiplayerGameApp {
   constructor() {

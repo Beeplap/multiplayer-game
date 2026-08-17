@@ -1,4 +1,4 @@
-# 🏛️ Mini Militia 2D — Architecture & Network Protocol Specification
+# 🏛️ WEGETHER — Architecture & Network Protocol Specification
 
 ## 1. Network Message Schemas
 
