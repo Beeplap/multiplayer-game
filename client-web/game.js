@@ -977,24 +977,27 @@ class MultiplayerGameApp {
       if (this.touchJoyLeft.vy < -0.15) thrustY = this.touchJoyLeft.vy;
     }
 
-    p.vx += moveX * 0.85;
-    p.vx *= 0.89;
+    // Balanced Tactical Movement Physics (Crisp, controllable, non-slippery)
+    p.vx += moveX * 0.58;
+    p.vx *= 0.86;
 
     if (Math.abs(p.vx) > 0.3 && p.isGrounded) {
-      this.walkCycle += Math.abs(p.vx) * 0.25;
+      this.walkCycle += Math.abs(p.vx) * 0.22;
     }
 
-    p.vy += 0.46;
+    p.vy += 0.38;
 
     if (thrustY < 0) {
-      p.vy -= 1.15;
-      p.vy = Math.max(-9.5, p.vy);
+      p.vy -= 0.76;
+      p.vy = Math.max(-6.5, p.vy);
       p.isFlying = true;
       p.isGrounded = false;
       this.spawnJetpackParticle(p.x, p.y + 16, p.aimAngle);
     } else {
       p.isFlying = false;
     }
+
+    p.vy = Math.min(7.5, p.vy);
 
     p.x += p.vx;
     p.y += p.vy;
