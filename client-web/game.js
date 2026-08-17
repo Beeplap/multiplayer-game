@@ -1109,7 +1109,7 @@ class MultiplayerGameApp {
 
     const fireDelays = {
       uzi: 110,
-      shotgun: 380,
+      shotgun: 680, // Decreased firerate (deliberate heavy tactical pump action)
       sniper: 650,
       rpg: 850
     };
@@ -1225,17 +1225,60 @@ class MultiplayerGameApp {
       p.isGrounded = p.y + soldierRadius >= curGroundY - 3;
     }
 
-    // Organic Sloped Platforms Landing
+    // ──────────────── 4-WAY SOLID OBSTACLE & PLATFORM COLLISION ────────────────
     for (const plat of this.platforms) {
-      if (plat.type !== 'GROUND') {
-        if (p.x + soldierRadius > plat.x && p.x - soldierRadius < plat.x + plat.w) {
-          const topY = this.getPlatformTopY(plat, p.x);
-          const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
-          if (p.y + soldierRadius >= topY && p.y + soldierRadius <= topY + 28 && p.vy >= 0) {
+      if (plat.type === 'GROUND') continue;
+
+      const platLeft = plat.x;
+      const platRight = plat.x + plat.w;
+
+      // Calculate exact top and bottom bounds at current player X
+      let topY, botY;
+      if (plat.type === 'ROCK') {
+        const progress = Math.max(0, Math.min(1, (p.x - plat.x) / plat.w));
+        topY = this.getPlatformTopY(plat, p.x);
+        botY = plat.y + plat.h + Math.sin(progress * Math.PI) * 35 + 6;
+      } else {
+        topY = plat.y;
+        botY = plat.y + plat.h;
+      }
+
+      // Check if player is horizontally overlapping with obstacle
+      if (p.x + soldierRadius > platLeft && p.x - soldierRadius < platRight) {
+        // 1. Landing on Top Surface (from above)
+        if (p.y + soldierRadius >= topY && p.y + soldierRadius <= topY + 28 && p.vy >= 0) {
+          p.y = topY - soldierRadius;
+          p.vy = 0;
+          p.isGrounded = true;
+        }
+        // 2. Hitting Bottom Underside (from below - NO CLIPPING THROUGH FROM BELOW!)
+        else if (p.y - soldierRadius <= botY && p.y - soldierRadius >= botY - 26 && p.vy < 0) {
+          p.y = botY + soldierRadius;
+          p.vy = Math.max(0, p.vy); // Stop upward thrust immediately
+        }
+        // 3. Trapped Inside Obstacle Core -> Resolve cleanly to nearest surface
+        else if (p.y + soldierRadius > topY && p.y - soldierRadius < botY) {
+          const distToTop = Math.abs((p.y + soldierRadius) - topY);
+          const distToBot = Math.abs((p.y - soldierRadius) - botY);
+          if (distToTop < distToBot) {
             p.y = topY - soldierRadius;
             p.vy = 0;
             p.isGrounded = true;
+          } else {
+            p.y = botY + soldierRadius;
+            p.vy = Math.max(0, p.vy);
           }
+        }
+      }
+
+      // Lateral (Left/Right) Wall Collision for Obstacles
+      if (p.y + soldierRadius > topY + 6 && p.y - soldierRadius < botY - 6) {
+        if (p.x + soldierRadius >= platLeft && p.x + soldierRadius <= platLeft + 16 && p.vx > 0) {
+          p.x = platLeft - soldierRadius;
+          p.vx = 0;
+        } else if (p.x - soldierRadius <= platRight && p.x - soldierRadius >= platRight - 16 && p.vx < 0) {
+          p.x = platRight + soldierRadius;
+          p.vx = 0;
         }
       }
     }
@@ -1299,7 +1342,19 @@ class MultiplayerGameApp {
       // Hit Local Player
       if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
         if (Math.hypot(b.x - p.x, b.y - p.y) < soldierRadius + 4) {
-          const dmg = b.weapon === 'sniper' ? 70 : b.weapon === 'shotgun' ? 14 : b.weapon === 'rpg' ? 90 : 18;
+          let dmg;
+          if (b.weapon === 'sniper') dmg = 70;
+          else if (b.weapon === 'rpg') dmg = 90;
+          else if (b.weapon === 'uzi') {
+            // SMG effective range dropoff (18 at close range, 12 at edge)
+            dmg = b.life < 16 ? 18 : 12;
+          } else if (b.weapon === 'shotgun') {
+            // Shotgun effective range dropoff (15 tight blast, 7 at edge)
+            dmg = b.life < 8 ? 15 : 7;
+          } else {
+            dmg = 16;
+          }
+
           this.spawnImpactSparks(b.x, b.y, '#FF3366');
 
           if (b.weapon === 'rpg') {
@@ -1316,7 +1371,12 @@ class MultiplayerGameApp {
         }
       }
 
-      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > bGroundY || b.life > 75) {
+      // Decreased Range Limits: Shotgun = 18 frames (~250px), SMG = 32 frames (~540px), Sniper/RPG = 78 frames
+      const maxLife = b.maxLife || (b.weapon === 'shotgun' ? 18 : b.weapon === 'uzi' ? 32 : 78);
+      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > bGroundY || b.life > maxLife) {
+        if (b.life > maxLife && (b.weapon === 'shotgun' || b.weapon === 'uzi')) {
+          this.spawnImpactSparks(b.x, b.y, b.color);
+        }
         this.bullets.splice(i, 1);
       }
     }
@@ -1572,27 +1632,34 @@ class MultiplayerGameApp {
       const bullet = {
         x: Math.round(p.x + Math.cos(p.aimAngle) * 26),
         y: Math.round(p.y + Math.sin(p.aimAngle) * 26),
-        vx: Math.round(Math.cos(p.aimAngle) * 18 * 10) / 10,
-        vy: Math.round(Math.sin(p.aimAngle) * 18 * 10) / 10,
+        vx: Math.round(Math.cos(p.aimAngle) * 17 * 10) / 10,
+        vy: Math.round(Math.sin(p.aimAngle) * 17 * 10) / 10,
         weapon: 'uzi',
         ownerId: this.myPlayerId,
-        color: '#00E5FF'
+        color: '#00E5FF',
+        life: 0,
+        maxLife: 32 // Decreased SMG bullet range (~540px effective CQB distance)
       };
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
     } else if (wep === 'shotgun') {
       const burst = [];
       for (let i = 0; i < 6; i++) {
-        const spread = (Math.random() - 0.5) * 0.35;
+        const spread = (Math.random() - 0.5) * 0.42;
         const angle = p.aimAngle + spread;
-        const speed = 15 + Math.random() * 3;
+        const speed = 13 + Math.random() * 3;
         const pellet = {
           x: Math.round(p.x + Math.cos(angle) * 26),
           y: Math.round(p.y + Math.sin(angle) * 26),
           vx: Math.round(Math.cos(angle) * speed * 10) / 10,
-          vy: Math.round(Math.sin(angle) * speed * 10) / 10
+          vy: Math.round(Math.sin(angle) * speed * 10) / 10,
+          weapon: 'shotgun',
+          ownerId: this.myPlayerId,
+          color: '#FF7B00',
+          life: 0,
+          maxLife: 18 // Decreased Shotgun range (~250px tight spread blast)
         };
-        this.bullets.push({ ...pellet, weapon: 'shotgun', ownerId: this.myPlayerId, color: '#FF7B00', life: 0 });
+        this.bullets.push(pellet);
         burst.push(pellet);
       }
       this.send('BULLET_BURST', { bullets: burst });
