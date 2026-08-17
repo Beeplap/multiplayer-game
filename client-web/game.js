@@ -566,6 +566,27 @@ class MultiplayerGameApp {
         available: true
       }
     ];
+
+    // Natural Hand-Drawn Palm Trees (Scattered Across Hills, Islands & Valley)
+    this.sceneryTrees = [
+      { x: 160, height: 110, scale: 1.0, lean: -0.07, hasBoulders: true },
+      { x: 420, height: 125, scale: 1.05, lean: 0.05, hasBoulders: true, platIdx: 1 },
+      { x: 930, height: 130, scale: 1.1, lean: -0.06, hasBoulders: true, platIdx: 3 },
+      { x: 1380, height: 115, scale: 0.95, lean: 0.08, hasBoulders: true },
+      { x: 2120, height: 115, scale: 0.95, lean: -0.08, hasBoulders: true },
+      { x: 2630, height: 125, scale: 1.05, lean: 0.06, hasBoulders: true, platIdx: 7 },
+      { x: 3170, height: 135, scale: 1.12, lean: -0.05, hasBoulders: true, platIdx: 9 }
+    ];
+
+    // Extra Surface Boulder Clusters on Natural Hills & Ridges
+    this.surfaceBoulders = [
+      { x: 310, count: 3, scale: 1.1 },
+      { x: 740, count: 2, scale: 0.9 },
+      { x: 1240, count: 3, scale: 1.0 },
+      { x: 2320, count: 2, scale: 1.0 },
+      { x: 2820, count: 3, scale: 1.2 },
+      { x: 3340, count: 2, scale: 0.95 }
+    ];
   }
 
   startDynamicGunSpawner() {
@@ -1656,7 +1677,10 @@ class MultiplayerGameApp {
       }
     }
 
-    // 4. Render Wooden Outpost Front Log Structure & Roof (3D Interlocking Timber Logs)
+    // 4. Render Surface Boulders & Tall Palm Trees (Natural Scenery)
+    this.drawWorldScenery(ctx);
+
+    // 5. Render Wooden Outpost Front Log Structure & Roof (3D Interlocking Timber Logs)
     this.drawWoodenOutpostFront(ctx, 1580, 840, 440, 240);
 
     // 5. Tactical Pickups
@@ -2227,7 +2251,7 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // 4. Natural Organic Rock Platform (Authentic Hand-Drawn Earthy Stones, Curved Bowl Underside & Cartoon Grass)
+  // 4. Natural Organic Rock Platform (Authentic Hand-Drawn Earthy Stones, Curved Bowl Underside, Embedded Faceted Polygon Rocks & Cartoon Grass)
   drawRockPlatform(ctx, plat) {
     ctx.save();
 
@@ -2294,33 +2318,25 @@ class MultiplayerGameApp {
     ctx.lineTo(rightX + 18, rightTopY + 34);
     ctx.stroke();
 
-    // F. Embedded Rounded River Stones / Pebbles (Scattered Along Curved Bottom & Sides)
+    // F. Embedded Faceted Polygon Rocks & Mineral Chunks (Matching Screenshot 2)
+    // 1. Along the curved bottom boundary:
     const numPebbles = 16;
     for (let i = 0; i <= numPebbles; i++) {
       const progress = i / numPebbles;
       const px = plat.x + progress * plat.w;
       const bowlDrop = Math.sin(progress * Math.PI) * 35 + Math.sin(progress * 10) * 6;
       const py = plat.y + plat.h + bowlDrop - 2;
-      const pr = 5 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 6;
-
-      ctx.fillStyle = '#B5A593';
-      ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pebble Shadow Rim
-      ctx.fillStyle = '#6E5F50';
-      ctx.beginPath();
-      ctx.arc(px + 1.2, py + 1.2, pr * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pebble Black Outline
-      ctx.strokeStyle = '#241C15';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(px, py, pr, 0, Math.PI * 2);
-      ctx.stroke();
+      const pr = 6 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 7;
+      const angle = (i * 0.6) + Math.sin(i);
+      this.drawFacetedRock(ctx, px, py, pr, angle, i + 1);
     }
+
+    // 2. Scattered interior faceted stones across the rock face (Matching Screenshot 2):
+    this.drawFacetedRock(ctx, plat.x + plat.w * 0.28, plat.y + 36, 11, 0.4, 11);
+    this.drawFacetedRock(ctx, plat.x + plat.w * 0.68, plat.y + 44, 13, -0.3, 12);
+    this.drawFacetedRock(ctx, plat.x + plat.w * 0.48, plat.y + 56, 9, 0.7, 13);
+    this.drawFacetedRock(ctx, plat.x + plat.w * 0.18, plat.y + 50, 8, -0.5, 14);
+    this.drawFacetedRock(ctx, plat.x + plat.w * 0.82, plat.y + 38, 10, 0.2, 15);
 
     // G. Multi-Layered Pointed Cartoon Grass on Top Sloped Ridge
     // Layer 1: Dark Green Under-Shadow Grass
@@ -2349,66 +2365,6 @@ class MultiplayerGameApp {
       ctx.strokeStyle = '#1B5E20';
       ctx.lineWidth = 1.2;
       ctx.stroke();
-    }
-
-    // H. Tropical Palm / Fern Bush Plant on Island Crest
-    if (plat.hasPalm) {
-      const palmX = plat.x + plat.w * 0.48;
-      const palmY = this.getPlatformTopY(plat, palmX);
-      this.drawTropicalPalmBush(ctx, palmX, palmY);
-    }
-
-    ctx.restore();
-  }
-
-  // Helper: Draw Tropical Comic Palm/Fern Plant on Islands (Matching Reference Screenshot)
-  drawTropicalPalmBush(ctx, px, py) {
-    ctx.save();
-    ctx.translate(px, py - 2);
-
-    const fronds = [
-      { angle: -2.3, len: 32, w: 12 },
-      { angle: -1.8, len: 38, w: 14 },
-      { angle: -1.3, len: 42, w: 16 },
-      { angle: -0.8, len: 38, w: 14 },
-      { angle: -0.3, len: 32, w: 12 }
-    ];
-
-    for (const f of fronds) {
-      ctx.save();
-      ctx.rotate(f.angle + Math.PI / 2);
-
-      // Frond Leaf Gradient
-      const leafGrad = ctx.createLinearGradient(0, 0, 0, -f.len);
-      leafGrad.addColorStop(0, '#2E7D32');
-      leafGrad.addColorStop(0.5, '#4CAF50');
-      leafGrad.addColorStop(1, '#81C784');
-
-      ctx.fillStyle = leafGrad;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(-f.w / 2, -f.len / 2, 0, -f.len);
-      ctx.quadraticCurveTo(f.w / 2, -f.len / 2, 0, 0);
-      ctx.fill();
-
-      // Leaf Central Rib Spine
-      ctx.strokeStyle = '#1B5E20';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -f.len);
-      ctx.stroke();
-
-      // Cartoon Outline
-      ctx.strokeStyle = '#1F130B';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(-f.w / 2, -f.len / 2, 0, -f.len);
-      ctx.quadraticCurveTo(f.w / 2, -f.len / 2, 0, 0);
-      ctx.stroke();
-
-      ctx.restore();
     }
 
     ctx.restore();
@@ -2452,17 +2408,11 @@ class MultiplayerGameApp {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // C. Embedded Rock Chunks in Underground Earth
-    ctx.fillStyle = '#7D6E5D';
+    // C. Embedded Faceted Rock Chunks in Underground Earth (Matching Screenshot 2)
     for (let sx = 40; sx < this.worldWidth; sx += 90) {
       const topY = this.getGroundYAt(sx);
-      ctx.beginPath();
-      ctx.arc(sx + 20, topY + 38, 8, 0, Math.PI * 2);
-      ctx.arc(sx + 60, topY + 72, 11, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#241C15';
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
+      this.drawFacetedRock(ctx, sx + 20, topY + 42, 12, (sx * 0.05), sx);
+      this.drawFacetedRock(ctx, sx + 65, topY + 80, 16, (sx * 0.08) + 1, sx + 1);
     }
 
     // D. Continuous Stylized Cartoon Grass Following the Rolling Slopes
@@ -2493,6 +2443,313 @@ class MultiplayerGameApp {
     }
 
     ctx.restore();
+  }
+
+  // ──────────────── AUTHENTIC SCENERY: FACETED ROCKS & TALL PALM TREES ────────────────
+
+  // 1. Faceted Angular Polygon Rocks (Matching Reference Screenshot 2)
+  drawFacetedRock(ctx, cx, cy, radius, angle = 0, seed = 1) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    // Generate 5-7 irregular polygon vertices using deterministic trigonometric pseudo-random jitter
+    const numVerts = 5 + (Math.abs(seed) % 3);
+    const verts = [];
+    for (let i = 0; i < numVerts; i++) {
+      const a = (i / numVerts) * Math.PI * 2;
+      const jitter = 0.72 + (Math.sin(i * 3.7 + seed * 2.3) * 0.5 + 0.5) * 0.45;
+      const r = radius * jitter;
+      verts.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
+    }
+
+    // A. Base Slate Rock Fill
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (let i = 1; i < numVerts; i++) {
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#64748B';
+    ctx.fill();
+
+    // B. Light Top Facet (Facing light from top-left)
+    ctx.fillStyle = '#E2E8F0';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(verts[numVerts - 1].x, verts[numVerts - 1].y);
+    ctx.lineTo(verts[0].x, verts[0].y);
+    ctx.lineTo(verts[1].x, verts[1].y);
+    ctx.closePath();
+    ctx.fill();
+
+    // C. Midtone Side Facet
+    ctx.fillStyle = '#94A3B8';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(verts[1].x, verts[1].y);
+    ctx.lineTo(verts[2].x, verts[2].y);
+    ctx.closePath();
+    ctx.fill();
+
+    // D. Dark Bottom/Shadow Facet
+    ctx.fillStyle = '#475569';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    for (let i = 2; i < numVerts; i++) {
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // E. Internal Facet Ridge Lines
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let i = 0; i < numVerts; i++) {
+      ctx.moveTo(0, 0);
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.stroke();
+
+    // F. Heavy Black Cartoon Contour Outline
+    ctx.strokeStyle = '#1E293B';
+    ctx.lineWidth = Math.max(1.8, radius * 0.14);
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (let i = 1; i < numVerts; i++) {
+      ctx.lineTo(verts[i].x, verts[i].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 2. Tall Authentic Cartoon Palm Tree (Matching Reference Screenshot 1)
+  drawPalmTree(ctx, x, y, height, scale = 1.0, lean = 0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    const trunkSegments = Math.round(height / 14);
+    const segHeight = height / trunkSegments;
+    const trunkBaseW = 18;
+    const trunkTopW = 11;
+
+    // A. Compute Segmented Trunk Spine Coordinates
+    const trunkPoints = [{ x: 0, y: 0, w: trunkBaseW }];
+
+    for (let s = 1; s <= trunkSegments; s++) {
+      const progress = s / trunkSegments;
+      const segW = trunkBaseW + (trunkTopW - trunkBaseW) * progress;
+      const segX = Math.sin(progress * Math.PI * 0.8) * (lean * 140);
+      const segY = -s * segHeight;
+      trunkPoints.push({ x: segX, y: segY, w: segW });
+    }
+
+    // B. Draw Diamond-Scaly Trunk Segments
+    for (let s = 0; s < trunkSegments; s++) {
+      const b0 = trunkPoints[s];
+      const b1 = trunkPoints[s + 1];
+
+      ctx.beginPath();
+      ctx.moveTo(b0.x - b0.w / 2, b0.y);
+      ctx.lineTo(b0.x + b0.w / 2, b0.y);
+      ctx.lineTo(b1.x + b1.w / 2, b1.y);
+      ctx.lineTo(b1.x - b1.w / 2, b1.y);
+      ctx.closePath();
+
+      const barkGrad = ctx.createLinearGradient(b0.x - b0.w / 2, 0, b0.x + b0.w / 2, 0);
+      barkGrad.addColorStop(0, s % 2 === 0 ? '#8D7B58' : '#A08E6B');
+      barkGrad.addColorStop(0.5, s % 2 === 0 ? '#A08E6B' : '#B5A380');
+      barkGrad.addColorStop(1, '#5E4E30');
+      ctx.fillStyle = barkGrad;
+      ctx.fill();
+
+      // Diamond / Scaly Bark Cross Lines
+      ctx.strokeStyle = '#2A1F13';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(b0.x - b0.w / 2, b0.y);
+      ctx.lineTo(b1.x + b1.w / 2, b1.y);
+      ctx.moveTo(b0.x + b0.w / 2, b0.y);
+      ctx.lineTo(b1.x - b1.w / 2, b1.y);
+      ctx.stroke();
+    }
+
+    // C. Trunk Cartoon Border Outlines
+    ctx.strokeStyle = '#1F140A';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(trunkPoints[0].x - trunkPoints[0].w / 2, trunkPoints[0].y);
+    for (let s = 1; s <= trunkSegments; s++) {
+      ctx.lineTo(trunkPoints[s].x - trunkPoints[s].w / 2, trunkPoints[s].y);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(trunkPoints[0].x + trunkPoints[0].w / 2, trunkPoints[0].y);
+    for (let s = 1; s <= trunkSegments; s++) {
+      ctx.lineTo(trunkPoints[s].x + trunkPoints[s].w / 2, trunkPoints[s].y);
+    }
+    ctx.stroke();
+
+    // D. Palm Crown (Top of Trunk with Jagged Leaflet Cutouts)
+    const crownTop = trunkPoints[trunkSegments];
+    ctx.save();
+    ctx.translate(crownTop.x, crownTop.y);
+
+    const fronds = [
+      { angle: -2.85, len: 48, w: 18, notches: 3 },
+      { angle: -2.40, len: 58, w: 22, notches: 4 },
+      { angle: -1.95, len: 68, w: 24, notches: 4 },
+      { angle: -1.57, len: 72, w: 26, notches: 5 },
+      { angle: -1.18, len: 68, w: 24, notches: 4 },
+      { angle: -0.75, len: 58, w: 22, notches: 4 },
+      { angle: -0.30, len: 48, w: 18, notches: 3 }
+    ];
+
+    for (const f of fronds) {
+      ctx.save();
+      ctx.rotate(f.angle + Math.PI / 2);
+
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+
+      // Left edge with leaflet cutouts
+      const n = f.notches;
+      for (let i = 1; i <= n; i++) {
+        const t1 = (i - 0.5) / n;
+        const t2 = i / n;
+        const w1 = Math.sin(t1 * Math.PI) * (f.w / 2);
+        const w2 = Math.sin(t2 * Math.PI) * (f.w / 2);
+        ctx.lineTo(-w1 * 1.15, -t1 * f.len);
+        ctx.lineTo(-w2 * 0.45, -t1 * f.len - f.len / (n * 2.5));
+      }
+      ctx.lineTo(0, -f.len);
+
+      // Right edge with leaflet cutouts
+      for (let i = n; i >= 1; i--) {
+        const t1 = i / n;
+        const t2 = (i - 0.5) / n;
+        const w1 = Math.sin(t1 * Math.PI) * (f.w / 2);
+        const w2 = Math.sin(t2 * Math.PI) * (f.w / 2);
+        ctx.lineTo(w1 * 0.45, -t1 * f.len + f.len / (n * 2.5));
+        ctx.lineTo(w2 * 1.15, -t2 * f.len);
+      }
+      ctx.closePath();
+
+      const leafGrad = ctx.createLinearGradient(0, 0, 0, -f.len);
+      leafGrad.addColorStop(0, '#2E7D32');
+      leafGrad.addColorStop(0.4, '#4CAF50');
+      leafGrad.addColorStop(0.85, '#7CB342');
+      leafGrad.addColorStop(1, '#9CCC65');
+
+      ctx.fillStyle = leafGrad;
+      ctx.fill();
+
+      // Central Spine Rib
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -f.len);
+      ctx.stroke();
+
+      // Heavy Cartoon Outline
+      ctx.strokeStyle = '#18240F';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // Coconut / Frond Hub Center
+    ctx.fillStyle = '#4E342E';
+    ctx.beginPath();
+    ctx.arc(-4, -2, 6, 0, Math.PI * 2);
+    ctx.arc(4, -3, 5, 0, Math.PI * 2);
+    ctx.arc(0, 3, 5.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#26170E';
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+
+    ctx.restore(); // Crown restore
+
+    // E. Base Faceted Boulders & Grass (Matching Screenshot 1)
+    this.drawFacetedRock(ctx, -14, -6, 13, -0.2, 1);
+    this.drawFacetedRock(ctx, 12, -7, 15, 0.3, 2);
+    this.drawFacetedRock(ctx, 0, -4, 10, 0.1, 3);
+
+    // Comic grass tufts around tree base
+    ctx.fillStyle = '#7CB342';
+    for (let gx = -22; gx <= 22; gx += 8) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx + 3, -9);
+      ctx.lineTo(gx + 6, 0);
+      ctx.fill();
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    ctx.restore(); // Tree restore
+  }
+
+  // 3. Surface Boulder Cluster on Grass
+  drawBoulderCluster(ctx, x, y, count = 3, scale = 1.0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    if (count >= 3) {
+      this.drawFacetedRock(ctx, -16, -8, 16, -0.25, 4);
+      this.drawFacetedRock(ctx, 14, -9, 18, 0.35, 5);
+      this.drawFacetedRock(ctx, -1, -12, 13, 0.1, 6);
+    } else {
+      this.drawFacetedRock(ctx, -10, -8, 17, -0.15, 7);
+      this.drawFacetedRock(ctx, 11, -7, 14, 0.25, 8);
+    }
+
+    // Grass tufts around boulders
+    ctx.fillStyle = '#689F38';
+    for (let gx = -22; gx <= 22; gx += 9) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx + 3, -8);
+      ctx.lineTo(gx + 6, 0);
+      ctx.fill();
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // 4. World Scenery Dispatcher (Palm Trees & Surface Boulders)
+  drawWorldScenery(ctx) {
+    // A. Surface Boulder Clusters
+    if (this.surfaceBoulders) {
+      for (const b of this.surfaceBoulders) {
+        const baseY = this.getGroundYAt(b.x);
+        this.drawBoulderCluster(ctx, b.x, baseY, b.count, b.scale);
+      }
+    }
+
+    // B. Natural Hand-Drawn Palm Trees
+    if (this.sceneryTrees) {
+      for (const tree of this.sceneryTrees) {
+        let baseY = this.getGroundYAt(tree.x);
+        if (tree.platIdx !== undefined && this.platforms[tree.platIdx]) {
+          baseY = this.getPlatformTopY(this.platforms[tree.platIdx], tree.x);
+        }
+        this.drawPalmTree(ctx, tree.x, baseY, tree.height, tree.scale, tree.lean);
+      }
+    }
   }
 
   // ──────────────── TACTICAL CROSSHAIR DRAWING ────────────────
