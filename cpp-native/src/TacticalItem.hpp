@@ -76,7 +76,7 @@ struct ActiveGrenade {
 
     void update(float dt) {
         if (exploded) return;
-        vel.y += 0.45f; // Gravity
+        vel.y += 0.15f; // Gravity (realistic arc trajectory)
         pos += vel;
         vel.x *= 0.98f;
         fuseTimerSec -= dt;

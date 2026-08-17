@@ -9,9 +9,9 @@ High-performance, C++ native 2D multiplayer tactical shooter inspired by **Doodl
 ### 1. 🚀 Infinite Jetpack Flight (Never Empties)
 * **Flight Mechanics**: Continuous jetpack thrust whenever movement/thrust joystick or key is held.
 * **Physics Model**:
-  * Upward thrust counteracts gravity with terminal upward velocity ($v_{y,\text{max}} = -9.0\text{ px/tick}$).
-  * Dynamic air drag and inertia ($0.89$ horizontal damping).
-  * Unlimited gas — players can perform mid-air dogfights and hover sniping indefinitely!
+  * Real Jetpack Flight: Balanced thrust curve ($T = 0.27\text{ px/tick}^2$) counteracting natural gravity ($g = 0.13$) with steady terminal ascent rate ($v_{y,\text{max}} = -2.2\text{ px/tick}$).
+  * Ground vs Air Dynamics: High ground traction ($0.72$ damping, normal $1.9\text{ px/tick}$ tactical walking pace) and aerodynamic gliding drag in air ($0.93$).
+  * Unlimited gas — players can perform mid-air dogfights, hover sniping, and tactical maneuvering indefinitely!
 
 ### 2. 🔫 Infinite Primary Ammo (Never Empties)
 * **Standard Weapons** have **unlimited ammunition** with unique fire rates and spreads:

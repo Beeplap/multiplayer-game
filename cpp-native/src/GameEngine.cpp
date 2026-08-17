@@ -42,7 +42,7 @@ void GameEngine::throwGrenade(Vec2 origin, float aimAngle, float power) {
     g.id = static_cast<uint32_t>(rand());
     g.ownerId = localPlayer.playerId;
     g.pos = origin + Vec2{std::cos(aimAngle) * 25.0f, std::sin(aimAngle) * 25.0f};
-    g.vel = Vec2{std::cos(aimAngle) * power, std::sin(aimAngle) * power - 4.0f};
+    g.vel = Vec2{std::cos(aimAngle) * (power * 0.40f), std::sin(aimAngle) * (power * 0.40f) - 1.6f};
     g.fuseTimerSec = 2.0f;
     g.exploded = false;
     grenades.push_back(g);

@@ -617,58 +617,54 @@ input[type="text"]:focus {
   color: var(--accent-cyan);
 }
 
-/* Weapon Arsenal Switcher Bar */
-.weapon-arsenal-bar {
+/* Interactive [F] Equip Gun Prompt */
+.equip-prompt-box {
   position: absolute;
-  bottom: 14px;
+  bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
-  gap: 6px;
-  background: rgba(12, 16, 26, 0.88);
-  border: 1px solid var(--panel-border);
-  backdrop-filter: blur(10px);
-  padding: 4px 8px;
-  border-radius: 12px;
-  z-index: 20;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  z-index: 25;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.weapon-select-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 6px 10px;
+.equip-prompt-box.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%) translateY(15px);
+}
+
+.btn-equip-action {
+  background: linear-gradient(135deg, #ffd600 0%, #ff8800 100%);
+  color: #000;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 18px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: #fff;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.weapon-select-btn.active {
-  background: rgba(0, 229, 255, 0.2);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
-}
-
-.wep-key {
-  font-size: 9px;
-  font-weight: 900;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 1px 4px;
-  border-radius: 3px;
-  color: var(--accent-gold);
-}
-
-.wep-label {
+  gap: 8px;
   font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 0 20px rgba(255, 214, 0, 0.6);
+  animation: pulseGlow 1.5s infinite alternate;
 }
 
-/* Tactical Action Bar (Finite Consumables) */
+.key-badge {
+  background: #000;
+  color: #ffd600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+@keyframes pulseGlow {
+  0% { transform: scale(1.0); box-shadow: 0 0 15px rgba(255, 214, 0, 0.5); }
+  100% { transform: scale(1.05); box-shadow: 0 0 25px rgba(255, 214, 0, 0.85); }
+}
+
+/* Tactical Action Bar (Finite Consumables - Auto Collected) */
 .tactical-action-bar {
   position: absolute;
   bottom: 100px;

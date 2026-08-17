@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Mini Militia 2D — Tactical Jetpack Shooter</title>
+  <title>Mini Militia 2D — Natural Warzone</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -18,7 +18,7 @@
         <div class="game-logo">
           <span class="logo-tag">GLOBAL MULTIPLAYER</span>
           <h1>MINI MILITIA 2D</h1>
-          <p class="logo-sub">ARTICULATED 3D COMMANDOS & TACTICAL ARSENAL</p>
+          <p class="logo-sub">NATURAL BATTLEFIELD • DYNAMIC GUN DROPS</p>
         </div>
 
         <div class="input-group">
@@ -49,7 +49,7 @@
         </div>
 
         <div class="quick-info-box">
-          <span>🚀 Infinite Jetpack • 🔫 4 Weapon Classes • 🧱 Solid Obstacles • 💣 Tacticals</span>
+          <span>🚀 Infinite Flight • 🌄 Wide Camera Scroll • 🏠 Central Bunker Shelter • 💥 Press [F] to Equip Guns</span>
         </div>
       </div>
     </div>
@@ -158,31 +158,15 @@
         </div>
       </div>
 
-      <!-- Bottom Weapon Arsenal Switcher (Keys: 1, 2, 3, 4) -->
-      <div class="weapon-arsenal-bar">
-        <button class="weapon-select-btn active" data-weapon="uzi" title="Dual Uzi (Key: 1)">
-          <span class="wep-icon">🔫</span>
-          <span class="wep-key">1</span>
-          <span class="wep-label">UZI</span>
-        </button>
-        <button class="weapon-select-btn" data-weapon="shotgun" title="Combat Shotgun (Key: 2)">
-          <span class="wep-icon">💥</span>
-          <span class="wep-key">2</span>
-          <span class="wep-label">SHOTGUN</span>
-        </button>
-        <button class="weapon-select-btn" data-weapon="sniper" title="Marksman Sniper (Key: 3)">
-          <span class="wep-icon">🎯</span>
-          <span class="wep-key">3</span>
-          <span class="wep-label">SNIPER</span>
-        </button>
-        <button class="weapon-select-btn" data-weapon="rpg" title="Rocket Launcher (Key: 4)">
-          <span class="wep-icon">🚀</span>
-          <span class="wep-key">4</span>
-          <span class="wep-label">RPG</span>
+      <!-- Interactive [F] Equip Gun Prompt (Appears when near weapon drop) -->
+      <div id="equip-prompt-box" class="equip-prompt-box hidden">
+        <button id="btn-equip-prompt" class="btn-equip-action">
+          <span class="key-badge">F</span>
+          <span id="equip-prompt-text">EQUIP WEAPON</span>
         </button>
       </div>
 
-      <!-- Tactical Inventory Action Bar (Finite Consumables) -->
+      <!-- Tactical Inventory Action Bar (Finite Consumables - Auto Picked Up) -->
       <div class="tactical-action-bar">
         <button id="btn-throw-grenade" class="tactical-btn" title="Throw Grenade (Key: G)">
           <span class="tac-icon">💣</span>

@@ -3,13 +3,23 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
+const fs = require('fs');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-// Serve the web client
-app.use(express.static(path.join(__dirname, '../client-web')));
+// Serve the web client (supports both root repository deploy and /server subfolder deploy)
+let clientPath = path.join(__dirname, '../client-web');
+if (!fs.existsSync(clientPath)) {
+  clientPath = path.join(__dirname, 'client-web');
+}
+app.use(express.static(clientPath));
+
+// Health Check Route for Render.com Zero-Downtime Monitoring
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'online', uptime: process.uptime() });
+});
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -32,6 +42,10 @@ const clients = new Map();
 let nextPlayerId = 1;
 
 wss.on('connection', (ws) => {
+  if (ws._socket && typeof ws._socket.setNoDelay === 'function') {
+    ws._socket.setNoDelay(true);
+  }
+
   const playerId = `P_${nextPlayerId++}`;
   const clientData = {
     id: playerId,
@@ -63,6 +77,14 @@ function handleClientMessage(ws, client, msg) {
   const { type, payload } = msg;
 
   switch (type) {
+    case 'PING': {
+      send(ws, 'PONG', {
+        clientTime: payload?.clientTime,
+        serverTime: Date.now()
+      });
+      break;
+    }
+
     case 'SET_NICKNAME': {
       if (payload && payload.nickname) {
         client.nickname = String(payload.nickname).trim().slice(0, 16) || client.nickname;
