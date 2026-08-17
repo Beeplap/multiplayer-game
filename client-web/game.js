@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — Articulated Skeletal Soldier & Multi-Weapon Tactical Engine
+// 🎮 Mini Militia 2D — 3D Gun Models, Tactical Drops & Articulated Warzone Engine
 
 class MultiplayerGameApp {
   constructor() {
@@ -11,6 +11,7 @@ class MultiplayerGameApp {
     this.currentWeapon = 'uzi'; // 'uzi', 'shotgun', 'sniper', 'rpg'
     this.walkCycle = 0;
     this.recoilOffset = 0;
+    this.pickupNotifications = [];
 
     this.initDOM();
     this.loadAssets();
@@ -54,21 +55,24 @@ class MultiplayerGameApp {
   loadAssets() {
     this.assets = {
       bg: new Image(),
-      weapons: new Image(),
+      guns3d: new Image(),
+      pickups3d: new Image(),
       loaded: false
     };
 
     let loadedCount = 0;
     const onLoaded = () => {
       loadedCount++;
-      if (loadedCount >= 2) this.assets.loaded = true;
+      if (loadedCount >= 3) this.assets.loaded = true;
     };
 
     this.assets.bg.src = 'assets/arena_bunker_bg.jpg';
-    this.assets.weapons.src = 'assets/weapons.jpg';
+    this.assets.guns3d.src = 'assets/guns_3d.jpg';
+    this.assets.pickups3d.src = 'assets/pickups_3d.jpg';
 
     this.assets.bg.onload = onLoaded;
-    this.assets.weapons.onload = onLoaded;
+    this.assets.guns3d.onload = onLoaded;
+    this.assets.pickups3d.onload = onLoaded;
   }
 
   showScreen(screenKey) {
@@ -374,7 +378,7 @@ class MultiplayerGameApp {
     const H = this.canvas.height;
     const groundY = H - 80;
 
-    // Solid Tactical Obstacles & Bunkers
+    // Solid Reinforced Bunkers & Catwalk Platforms
     this.platforms = [
       { x: 0, y: groundY, w: W, h: 80, name: 'Ground' },
       { x: W * 0.08, y: H * 0.68, w: W * 0.22, h: 24, name: 'Left Lower Bunker' },
@@ -385,11 +389,18 @@ class MultiplayerGameApp {
       { x: W * 0.72, y: H * 0.46, w: W * 0.16, h: 24, name: 'Right High Perch' }
     ];
 
+    // 3D Gun Drops & Tactical Item Pedestals placed across the map
     this.pickups = [
-      { id: 'pk_g1', type: 'GRENADE', x: W * 0.5, y: H * 0.32, label: '💣 GRENADES', available: true },
-      { id: 'pk_m1', type: 'MINE', x: W * 0.18, y: H * 0.42, label: '⚡ MINES', available: true },
-      { id: 'pk_s1', type: 'SMOKE', x: W * 0.82, y: H * 0.42, label: '💨 SMOKE', available: true },
-      { id: 'pk_hp1', type: 'MEDKIT', x: W * 0.5, y: H * 0.54, label: '❤️ MEDKIT', available: true }
+      // 3D Weapon Drops
+      { id: 'gun_shotgun', kind: 'GUN', type: 'shotgun', x: W * 0.19, y: H * 0.64, label: '💥 COMBAT SHOTGUN', available: true },
+      { id: 'gun_sniper', kind: 'GUN', type: 'sniper', x: W * 0.50, y: H * 0.32, label: '🎯 MARKSMAN SNIPER', available: true },
+      { id: 'gun_rpg', kind: 'GUN', type: 'rpg', x: W * 0.50, y: H * 0.54, label: '🚀 RPG LAUNCHER', available: true },
+
+      // 3D Tactical Consumables
+      { id: 'pk_mine', kind: 'ITEM', type: 'MINE', x: W * 0.20, y: H * 0.42, label: '⚡ PROXIMITY MINE', available: true },
+      { id: 'pk_grenade', kind: 'ITEM', type: 'GRENADE', x: W * 0.80, y: H * 0.42, label: '💣 FRAG GRENADES', available: true },
+      { id: 'pk_smoke', kind: 'ITEM', type: 'SMOKE', x: W * 0.81, y: H * 0.64, label: '💨 SMOKE GRENADE', available: true },
+      { id: 'pk_medkit', kind: 'ITEM', type: 'MEDKIT', x: W * 0.50, y: groundY - 24, label: '❤️ MEDICAL CASE', available: true }
     ];
   }
 
@@ -709,11 +720,10 @@ class MultiplayerGameApp {
 
         if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0) {
           lastShootTime = now;
-          this.recoilOffset = 8.0; // Recoil Kickback
+          this.recoilOffset = 8.0;
           this.fireWeapon();
         }
 
-        // Decay Recoil Kickback
         if (this.recoilOffset > 0) {
           this.recoilOffset *= 0.82;
         }
@@ -745,15 +755,12 @@ class MultiplayerGameApp {
     p.vx += moveX * 0.85;
     p.vx *= 0.89;
 
-    // Running Walk Cycle
     if (Math.abs(p.vx) > 0.3 && p.isGrounded) {
       this.walkCycle += Math.abs(p.vx) * 0.25;
     }
 
-    // Gravity
     p.vy += 0.46;
 
-    // Infinite Jetpack Thrust
     if (thrustY < 0) {
       p.vy -= 1.15;
       p.vy = Math.max(-9.5, p.vy);
@@ -778,7 +785,6 @@ class MultiplayerGameApp {
     if (p.y - soldierRadius < 15) { p.y = 15 + soldierRadius; p.vy = 0; }
     if (p.y + soldierRadius > groundY) { p.y = groundY - soldierRadius; p.vy = 0; p.isGrounded = true; }
 
-    // Platform Landing Collisions
     p.isGrounded = p.y + soldierRadius >= groundY - 2;
     for (const plat of this.platforms) {
       if (
@@ -794,14 +800,12 @@ class MultiplayerGameApp {
       }
     }
 
-    // Aim Angle
     if (this.touchJoyRight.isAiming) {
       p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
     } else {
       p.aimAngle = Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
     }
 
-    // Remote Players Clamping & Interpolation
     this.remotePlayers.forEach(rp => {
       rp.targetX = Math.max(soldierRadius + 10, Math.min(W - soldierRadius - 10, rp.targetX));
       rp.targetY = Math.max(soldierRadius + 15, Math.min(groundY - soldierRadius, rp.targetY));
@@ -809,7 +813,7 @@ class MultiplayerGameApp {
       rp.y += (rp.targetY - rp.y) * 0.25;
     });
 
-    // ──────────────── BULLET & SOLID PLATFORM COLLISION (FIXED: NO PENETRATION) ────────────────
+    // ──────────────── BULLET & SOLID PLATFORM COLLISION (STOPPED IMMEDIATELY) ────────────────
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
       b.x += b.vx;
@@ -873,7 +877,6 @@ class MultiplayerGameApp {
       g.y += g.vy;
       g.fuse--;
 
-      // Boundary Bounces
       if (g.x < 15 || g.x > W - 15) {
         g.vx = -g.vx * 0.7;
         g.x = Math.max(15, Math.min(W - 15, g.x));
@@ -884,7 +887,6 @@ class MultiplayerGameApp {
         g.vx *= 0.75;
       }
 
-      // Platform Bounces
       for (const plat of this.platforms) {
         if (
           g.x >= plat.x && g.x <= plat.x + plat.w &&
@@ -933,19 +935,45 @@ class MultiplayerGameApp {
       if (pt.alpha <= 0) this.particles.splice(i, 1);
     }
 
-    // Pickups
+    // Check 3D Gun Drops & Tactical Pickups
     for (const pk of this.pickups) {
-      if (pk.available && Math.hypot(p.x - pk.x, p.y - pk.y) < 36) {
+      if (pk.available && Math.hypot(p.x - pk.x, p.y - pk.y) < 38) {
         pk.available = false;
-        if (pk.type === 'GRENADE') p.inventory.grenades = Math.min(4, p.inventory.grenades + 2);
-        else if (pk.type === 'MINE') p.inventory.mines = Math.min(3, p.inventory.mines + 1);
-        else if (pk.type === 'SMOKE') p.inventory.smoke = Math.min(3, p.inventory.smoke + 1);
-        else if (pk.type === 'MEDKIT') p.hp = Math.min(100, p.hp + 50);
+
+        if (pk.kind === 'GUN') {
+          // Equip weapon directly from map drop!
+          this.selectWeapon(pk.type);
+          this.addPickupNotification(`+EQUIPPED ${pk.label}`, '#00E5FF');
+        } else {
+          // Tactical Consumable
+          if (pk.type === 'GRENADE') { p.inventory.grenades = Math.min(4, p.inventory.grenades + 2); this.addPickupNotification('+2 FRAG GRENADES', '#00E676'); }
+          else if (pk.type === 'MINE') { p.inventory.mines = Math.min(3, p.inventory.mines + 1); this.addPickupNotification('+1 PROXIMITY MINE', '#FF3366'); }
+          else if (pk.type === 'SMOKE') { p.inventory.smoke = Math.min(3, p.inventory.smoke + 1); this.addPickupNotification('+1 SMOKE GRENADE', '#00E5FF'); }
+          else if (pk.type === 'MEDKIT') { p.hp = Math.min(100, p.hp + 50); this.addPickupNotification('+50 HEALTH RESTORED', '#00E676'); }
+        }
 
         this.updateTacticalHUD();
         this.send('PICKUP_COLLECT', { pickupId: pk.id, pickupType: pk.type });
       }
     }
+
+    // Update Floating Notifications
+    for (let i = this.pickupNotifications.length - 1; i >= 0; i--) {
+      const notif = this.pickupNotifications[i];
+      notif.y -= 0.8;
+      notif.alpha -= 0.02;
+      if (notif.alpha <= 0) this.pickupNotifications.splice(i, 1);
+    }
+  }
+
+  addPickupNotification(text, color) {
+    this.pickupNotifications.push({
+      text,
+      color,
+      x: this.localPlayer.x,
+      y: this.localPlayer.y - 45,
+      alpha: 1.0
+    });
   }
 
   createExplosion(x, y, radius, maxDamage, attackerId) {
@@ -1007,7 +1035,6 @@ class MultiplayerGameApp {
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
     } else if (wep === 'shotgun') {
-      // 6-pellet spread
       for (let i = 0; i < 6; i++) {
         const spread = (Math.random() - 0.5) * 0.35;
         const angle = p.aimAngle + spread;
@@ -1066,7 +1093,7 @@ class MultiplayerGameApp {
     });
   }
 
-  // ──────────────── RENDERING SKELETAL SOLDIER & WEAPONS ────────────────
+  // ──────────────── RENDERING ────────────────
   renderCanvas() {
     const ctx = this.ctx;
     const W = this.canvas.width;
@@ -1107,7 +1134,6 @@ class MultiplayerGameApp {
         ctx.lineWidth = 2;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
 
-        // Warning LED lights on platform underside
         ctx.fillStyle = '#FF7B00';
         ctx.beginPath();
         ctx.arc(plat.x + 12, plat.y + plat.h + 4, 3, 0, Math.PI * 2);
@@ -1117,34 +1143,10 @@ class MultiplayerGameApp {
       }
     }
 
-    // 3. Draw Tactical Crates
+    // 3. Draw 3D Gun Drops & Tactical Item Pedestals (High-Detail Models)
     for (const pk of this.pickups) {
       if (pk.available) {
-        ctx.save();
-        ctx.translate(pk.x, pk.y);
-        const bob = Math.sin(performance.now() * 0.005) * 4;
-        ctx.translate(0, bob);
-
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#FFD600';
-        ctx.fillStyle = '#FFD600';
-        ctx.fillRect(-14, -14, 28, 28);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(-14, -14, 28, 28);
-
-        ctx.strokeStyle = '#333';
-        ctx.beginPath();
-        ctx.moveTo(-14, -14); ctx.lineTo(14, 14);
-        ctx.moveTo(14, -14); ctx.lineTo(-14, 14);
-        ctx.stroke();
-
-        ctx.shadowBlur = 0;
-        ctx.font = 'bold 9px "Chakra Petch", sans-serif';
-        ctx.fillStyle = '#000';
-        ctx.textAlign = 'center';
-        ctx.fillText(pk.type.slice(0, 3), 0, 4);
-        ctx.restore();
+        this.draw3DPickupPedestal(ctx, pk);
       }
     }
 
@@ -1205,7 +1207,6 @@ class MultiplayerGameApp {
     for (const b of this.bullets) {
       ctx.save();
       if (b.weapon === 'rpg') {
-        // Rocket warhead render
         ctx.translate(b.x, b.y);
         ctx.rotate(Math.atan2(b.vy, b.vx));
         ctx.fillStyle = '#556B2F';
@@ -1214,7 +1215,6 @@ class MultiplayerGameApp {
         ctx.beginPath();
         ctx.moveTo(8, -4); ctx.lineTo(14, 0); ctx.lineTo(8, 4);
         ctx.fill();
-        // Rocket Smoke Trail
         this.particles.push({
           x: b.x, y: b.y,
           vx: (Math.random() - 0.5), vy: (Math.random() - 0.5),
@@ -1242,6 +1242,147 @@ class MultiplayerGameApp {
     if (this.localPlayer.hp > 0) {
       this.drawArticulatedSoldier(ctx, this.localPlayer, true, this.walkCycle, this.recoilOffset);
     }
+
+    // 11. Draw Floating Pickup Notifications
+    for (const notif of this.pickupNotifications) {
+      ctx.save();
+      ctx.globalAlpha = notif.alpha;
+      ctx.font = 'bold 12px "Chakra Petch", sans-serif';
+      ctx.fillStyle = notif.color;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = notif.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(notif.text, notif.x, notif.y);
+      ctx.restore();
+    }
+  }
+
+  // ──────────────── 3D GUN & ITEM PEDESTAL RENDERER ────────────────
+  draw3DPickupPedestal(ctx, pk) {
+    ctx.save();
+    ctx.translate(pk.x, pk.y);
+
+    const time = performance.now() * 0.003;
+    const bob = Math.sin(time * 2) * 5;
+    const glowColor = pk.kind === 'GUN' ? '#00E5FF' : (pk.type === 'MEDKIT' ? '#00E676' : '#FFD600');
+
+    // Holographic Pedestal Base
+    ctx.save();
+    ctx.scale(1, 0.4);
+    ctx.beginPath();
+    ctx.arc(0, 40, 26, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 229, 255, 0.15)';
+    ctx.fill();
+    ctx.strokeStyle = glowColor;
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = glowColor;
+    ctx.stroke();
+    ctx.restore();
+
+    // Floating 3D Weapon / Prop
+    ctx.save();
+    ctx.translate(0, bob);
+
+    if (pk.kind === 'GUN') {
+      // 3D Rotating Gun Model
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = glowColor;
+
+      if (pk.type === 'shotgun') {
+        // 3D Combat Shotgun Model
+        ctx.fillStyle = '#222834';
+        ctx.fillRect(-22, -6, 44, 10);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(22, -4, 12, 6);
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(-6, 2, 16, 5);
+        ctx.fillStyle = '#FF7B00';
+        ctx.fillRect(-18, -4, 16, 2);
+      } else if (pk.type === 'sniper') {
+        // 3D Sniper Rifle Model with Scope
+        ctx.fillStyle = '#1C2330';
+        ctx.fillRect(-26, -5, 38, 8);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(12, -3, 26, 4);
+        ctx.fillStyle = '#111';
+        ctx.fillRect(-8, -12, 18, 6);
+        ctx.fillStyle = '#00FF66';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00FF66';
+        ctx.fillRect(8, -11, 4, 4); // Glowing laser optic
+      } else if (pk.type === 'rpg') {
+        // 3D RPG Rocket Launcher Model
+        ctx.fillStyle = '#3E4D38';
+        ctx.fillRect(-24, -8, 42, 14);
+        ctx.fillStyle = '#FF3366';
+        ctx.beginPath();
+        ctx.moveTo(18, -8); ctx.lineTo(30, -1); ctx.lineTo(18, 6);
+        ctx.fill();
+      }
+    } else {
+      // 3D Tactical Item Prop
+      ctx.shadowBlur = 14;
+      ctx.shadowColor = glowColor;
+
+      if (pk.type === 'GRENADE') {
+        // 3D Green Frag Grenade
+        ctx.beginPath();
+        ctx.arc(0, 0, 12, 0, Math.PI * 2);
+        ctx.fillStyle = '#2E5934';
+        ctx.fill();
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#777';
+        ctx.fillRect(-3, -16, 6, 6); // Cap & Pin
+      } else if (pk.type === 'MINE') {
+        // 3D Proximity Landmine with Pulsing Red LED
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.fillStyle = '#2A2D34';
+        ctx.fill();
+        ctx.strokeStyle = '#FF3366';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Pulsing Core
+        ctx.fillStyle = '#FF3366';
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = '#FF3366';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (pk.type === 'SMOKE') {
+        // 3D Smoke Canister
+        ctx.fillStyle = '#4A5568';
+        ctx.fillRect(-8, -14, 16, 24);
+        ctx.fillStyle = '#00E5FF';
+        ctx.fillRect(-8, -4, 16, 6); // Blue signal band
+      } else if (pk.type === 'MEDKIT') {
+        // 3D Medical Case
+        ctx.fillStyle = '#1F2430';
+        ctx.fillRect(-14, -12, 28, 22);
+        ctx.strokeStyle = '#FFF';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-14, -12, 28, 22);
+        // Red / Green Cross
+        ctx.fillStyle = '#00E676';
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#00E676';
+        ctx.fillRect(-2, -8, 4, 14);
+        ctx.fillRect(-7, -3, 14, 4);
+      }
+    }
+    ctx.restore();
+
+    // Floating Label Tag
+    ctx.shadowBlur = 0;
+    ctx.font = 'bold 9.5px "Chakra Petch", sans-serif';
+    ctx.fillStyle = '#FFF';
+    ctx.textAlign = 'center';
+    ctx.fillText(pk.label, 0, -22 + bob);
+
+    ctx.restore();
   }
 
   // ──────────────── SKELETAL ARTICULATED SOLDIER RIGGING ────────────────
@@ -1271,7 +1412,6 @@ class MultiplayerGameApp {
       ctx.scale(-1, 1);
     }
 
-    // Adjust aim angle relative to facing direction
     let localAim = p.aimAngle;
     if (facingLeft) {
       localAim = Math.PI - p.aimAngle;
@@ -1298,15 +1438,14 @@ class MultiplayerGameApp {
     ctx.translate(-4, 12);
     ctx.rotate(legAngle2);
     ctx.fillStyle = '#1E2530';
-    ctx.fillRect(-3, 0, 6, 14); // Thigh
+    ctx.fillRect(-3, 0, 6, 14);
     ctx.fillStyle = '#111822';
-    ctx.fillRect(-4, 12, 9, 6);  // Boot
+    ctx.fillRect(-4, 12, 9, 6);
     ctx.restore();
 
     // 3. TORSO & ARMORED CHEST VEST
     ctx.fillStyle = '#2A3444';
     ctx.fillRect(-10, -10, 20, 22);
-    // Team Armor Plate
     ctx.fillStyle = teamColor;
     ctx.shadowBlur = 8;
     ctx.shadowColor = teamColor;
@@ -1325,15 +1464,15 @@ class MultiplayerGameApp {
     ctx.translate(4, 12);
     ctx.rotate(legAngle1);
     ctx.fillStyle = '#2E3847';
-    ctx.fillRect(-3, 0, 6, 14); // Thigh
+    ctx.fillRect(-3, 0, 6, 14);
     ctx.fillStyle = '#111822';
-    ctx.fillRect(-4, 12, 9, 6);  // Boot
+    ctx.fillRect(-4, 12, 9, 6);
     ctx.restore();
 
     // 4. HEAD / BALLISTIC HELMET WITH GLOWING VISOR
     ctx.save();
     ctx.translate(0, -16);
-    ctx.rotate(localAim * 0.25); // Head tilts with aim
+    ctx.rotate(localAim * 0.25);
     ctx.beginPath();
     ctx.arc(0, 0, 11, 0, Math.PI * 2);
     ctx.fillStyle = '#1E2530';
@@ -1356,13 +1495,13 @@ class MultiplayerGameApp {
     ctx.save();
     ctx.translate(0, -2);
     ctx.rotate(localAim);
-    ctx.translate(-recoil, 0); // Apply Recoil Kickback
+    ctx.translate(-recoil, 0);
 
     // Upper Arm
     ctx.fillStyle = '#2A3444';
     ctx.fillRect(0, -3, 12, 6);
 
-    // DRAW EQUIPPED WEAPON MODEL
+    // DRAW EQUIPPED 3D WEAPON MODEL
     this.drawWeaponModel(ctx, equippedWep, teamColor);
 
     // Forearm & Hand Gripping Gun
@@ -1395,43 +1534,37 @@ class MultiplayerGameApp {
   drawWeaponModel(ctx, wep, teamColor) {
     ctx.save();
     if (wep === 'uzi') {
-      // Dual SMG Uzi
       ctx.fillStyle = '#1B1F28';
       ctx.fillRect(10, -5, 18, 9);
       ctx.fillStyle = '#0E1116';
-      ctx.fillRect(28, -3, 8, 4); // Barrel
-      ctx.fillRect(14, 4, 5, 8);  // Magazine
+      ctx.fillRect(28, -3, 8, 4);
+      ctx.fillRect(14, 4, 5, 8);
       ctx.fillStyle = '#00E5FF';
-      ctx.fillRect(12, -4, 12, 2); // Glow strip
+      ctx.fillRect(12, -4, 12, 2);
     } else if (wep === 'shotgun') {
-      // Heavy Combat Shotgun
       ctx.fillStyle = '#232936';
       ctx.fillRect(8, -6, 26, 10);
       ctx.fillStyle = '#111';
-      ctx.fillRect(34, -4, 10, 6); // Heavy barrel
+      ctx.fillRect(34, -4, 10, 6);
       ctx.fillStyle = '#8B4513';
-      ctx.fillRect(16, 2, 10, 4); // Ribbed grip
+      ctx.fillRect(16, 2, 10, 4);
       ctx.fillStyle = '#FF7B00';
       ctx.fillRect(10, -5, 14, 2);
     } else if (wep === 'sniper') {
-      // Marksman Sniper Rifle
       ctx.fillStyle = '#1A212D';
       ctx.fillRect(6, -5, 24, 8);
       ctx.fillStyle = '#000';
-      ctx.fillRect(30, -3, 22, 4); // Long precision barrel
-      ctx.fillRect(48, -4, 4, 6);  // Muzzle brake
-      // High-tech Optical Scope
+      ctx.fillRect(30, -3, 22, 4);
+      ctx.fillRect(48, -4, 4, 6);
       ctx.fillStyle = '#111';
       ctx.fillRect(12, -10, 14, 5);
       ctx.fillStyle = '#00FF66';
-      ctx.fillRect(24, -9, 3, 3);  // Laser Scope Lens
+      ctx.fillRect(24, -9, 3, 3);
     } else if (wep === 'rpg') {
-      // Heavy RPG Rocket Launcher Tube
       ctx.fillStyle = '#3B4834';
-      ctx.fillRect(4, -8, 30, 14); // Launcher tube
+      ctx.fillRect(4, -8, 30, 14);
       ctx.fillStyle = '#1A2118';
       ctx.fillRect(34, -7, 6, 12);
-      // Warhead Cone
       ctx.fillStyle = '#FF3366';
       ctx.beginPath();
       ctx.moveTo(40, -8); ctx.lineTo(50, -1); ctx.lineTo(40, 6);
