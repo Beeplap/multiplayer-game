@@ -139,7 +139,7 @@
 
     <!-- SCREEN 3: 2D REAL-TIME JETPACK COMBAT ARENA -->
     <div id="screen-game" class="screen">
-      <!-- In-Game HUD -->
+      <!-- In-Game Top HUD -->
       <div class="game-hud">
         <!-- Top Left Health & Infinite Jet Status -->
         <div class="hud-top-left">
@@ -170,6 +170,14 @@
           </div>
           <button id="btn-fullscreen-toggle" class="btn-icon-small" title="Toggle Fullscreen">⛶</button>
           <button id="btn-exit-game" class="btn-icon-small danger" title="Exit to Lobby">✕</button>
+        </div>
+      </div>
+
+      <!-- Bottom Left Live Ping Display -->
+      <div class="hud-bottom-left">
+        <div id="hud-ping-display" class="ping-badge">
+          <span class="ping-dot"></span>
+          <span id="ping-val">-- ms</span>
         </div>
       </div>
 
@@ -205,14 +213,14 @@
         <canvas id="game-canvas"></canvas>
       </div>
 
-      <!-- Mobile Touch Dual-Stick Controls -->
+      <!-- Mobile Touch Dual-Stick Controls (Automatically hidden on desktop, positioned ergonomically) -->
       <div class="touch-controls" id="touch-controls">
         <!-- Left Joystick: Movement & Upward Jetpack Thrust -->
         <div class="joystick-zone left" id="joy-left-zone">
           <div class="joystick-base" id="joy-left-base">
             <div class="joystick-thumb" id="joy-left-thumb"></div>
           </div>
-          <span class="joy-label">MOVE / JETPACK</span>
+          <span class="joy-label">MOVE / FLY</span>
         </div>
 
         <!-- Right Joystick: 360° Aim & Continuous Auto-Fire -->
@@ -220,7 +228,7 @@
           <div class="joystick-base" id="joy-right-base">
             <div class="joystick-thumb" id="joy-right-thumb"></div>
           </div>
-          <span class="joy-label">AIM & AUTO-FIRE</span>
+          <span class="joy-label">AIM / FIRE</span>
         </div>
       </div>
     </div>

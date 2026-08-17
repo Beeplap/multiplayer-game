@@ -23,10 +23,18 @@ class MultiplayerGameApp {
     this.toxicDamageTick = 0;
 
     this.initDOM();
+    this.detectTouchDevice();
     this.loadAssets();
     this.initWebSocket();
     this.setupEventListeners();
     this.initGameCanvas();
+  }
+
+  detectTouchDevice() {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.matchMedia("(pointer: coarse)").matches);
+    if (isTouch) {
+      document.body.classList.add('is-touch-device');
+    }
   }
 
   initDOM() {
@@ -55,6 +63,9 @@ class MultiplayerGameApp {
     this.scoreRedEl = document.getElementById('score-red');
     this.scoreBlueEl = document.getElementById('score-blue');
     this.killFeedContainer = document.getElementById('kill-feed-container');
+
+    this.pingValEl = document.getElementById('ping-val');
+    this.hudPingDisplay = document.getElementById('hud-ping-display');
 
     this.equipPromptBox = document.getElementById('equip-prompt-box');
     this.equipPromptText = document.getElementById('equip-prompt-text');
@@ -96,6 +107,14 @@ class MultiplayerGameApp {
       this.ws.onopen = () => {
         console.log(' Connected to Game Server:', wsUrl);
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
+
+        // Heartbeat Ping (Every 2 seconds)
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        this.pingInterval = setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.send('PING', { clientTime: Date.now() });
+          }
+        }, 2000);
       };
 
       this.ws.onmessage = (event) => {
@@ -108,6 +127,7 @@ class MultiplayerGameApp {
       };
 
       this.ws.onclose = () => {
+        if (this.pingInterval) clearInterval(this.pingInterval);
         setTimeout(() => this.initWebSocket(), 3000);
       };
     } catch (e) {
@@ -125,6 +145,18 @@ class MultiplayerGameApp {
     const { type, payload } = msg;
 
     switch (type) {
+      case 'PONG': {
+        if (payload && payload.clientTime) {
+          const ping = Math.max(1, Date.now() - payload.clientTime);
+          if (this.pingValEl) this.pingValEl.textContent = `${ping} ms`;
+          const dot = this.hudPingDisplay?.querySelector('.ping-dot');
+          if (dot) {
+            dot.className = 'ping-dot' + (ping > 120 ? ' high' : ping > 60 ? ' medium' : '');
+          }
+        }
+        break;
+      }
+
       case 'CONNECTED':
         this.myPlayerId = payload.playerId;
         break;

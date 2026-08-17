@@ -680,6 +680,40 @@ input[type="text"]:focus {
   color: var(--accent-cyan);
 }
 
+/* ──────────────── BOTTOM-LEFT PING DISPLAY ──────────────── */
+.hud-bottom-left {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.ping-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.ping-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #00e676;
+  box-shadow: 0 0 6px #00e676;
+}
+
+.ping-dot.medium { background: #ffd600; box-shadow: 0 0 6px #ffd600; }
+.ping-dot.high { background: #ff3366; box-shadow: 0 0 6px #ff3366; }
+
 /* ──────────────── INTERACTIVE [E] EQUIP GUN PROMPT ──────────────── */
 .equip-prompt-box {
   position: absolute;
@@ -730,8 +764,8 @@ input[type="text"]:focus {
 /* ──────────────── SLEEK COMPACT THROWABLE HUD ──────────────── */
 .throwable-compact-slot {
   position: absolute;
-  bottom: 145px;
-  right: 22px;
+  bottom: 175px;
+  right: 28px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -776,8 +810,8 @@ input[type="text"]:focus {
   background: radial-gradient(circle at 30% 30%, #2a354c 0%, #101622 100%);
   border: 2px solid var(--accent-gold);
   border-radius: 50%;
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -804,7 +838,7 @@ input[type="text"]:focus {
 }
 
 .tac-3d-icon {
-  font-size: 26px;
+  font-size: 25px;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.8));
 }
 
@@ -855,7 +889,7 @@ input[type="text"]:focus {
   100% { opacity: 0; }
 }
 
-/* Canvas Area with Tactical Crosshair */
+/* Canvas Area */
 .canvas-container {
   width: 100%;
   height: 100%;
@@ -872,23 +906,35 @@ input[type="text"]:focus {
   cursor: crosshair;
 }
 
-/* ──────────────── DUAL-STICK TOUCH CONTROLS ──────────────── */
+/* ──────────────── MOBILE TOUCH CONTROLS (SHOW ONLY ON TOUCH/MOBILE DEVICES) ──────────────── */
 .touch-controls {
   position: absolute;
-  bottom: 0;
+  bottom: 42px; /* Positioned comfortably higher up for natural thumb rest */
   left: 0;
   right: 0;
-  height: 160px;
-  display: flex;
+  height: 140px;
+  display: none; /* Hidden by default on Desktop */
   justify-content: space-between;
-  padding: 10px 24px 20px 24px;
+  padding: 0 28px;
   pointer-events: none;
   z-index: 20;
 }
 
+/* Display joysticks ONLY on touch-capable mobile devices */
+@media (hover: none) and (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+  }
+}
+
+/* Also show if touch is programmatically detected */
+body.is-touch-device .touch-controls {
+  display: flex;
+}
+
 .joystick-zone {
-  width: 130px;
-  height: 130px;
+  width: 125px;
+  height: 125px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -899,21 +945,21 @@ input[type="text"]:focus {
 }
 
 .joystick-base {
-  width: 100px;
-  height: 100px;
+  width: 95px;
+  height: 95px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.09);
+  border: 2px solid rgba(255, 255, 255, 0.35);
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.6);
 }
 
 .joystick-thumb {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--accent-cyan);
   box-shadow: 0 0 15px var(--accent-cyan);
@@ -932,7 +978,7 @@ input[type="text"]:focus {
   font-size: 9px;
   font-weight: 900;
   color: var(--text-muted);
-  margin-top: 6px;
+  margin-top: 5px;
   letter-spacing: 0.5px;
   pointer-events: none;
 }
