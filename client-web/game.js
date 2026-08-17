@@ -1492,31 +1492,8 @@ class MultiplayerGameApp {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Stable Mountain Backdrop
-    if (this.assets.loaded && this.assets.bg.complete) {
-      const bg = this.assets.bg;
-
-      const scale = Math.max(W / bg.width, H / bg.height) * 1.08;
-      const scaledW = bg.width * scale;
-      const scaledH = bg.height * scale;
-
-      const maxCamX = Math.max(1, this.worldWidth - W);
-      const bgTravelX = Math.max(0, scaledW - W);
-      const bgX = -(Math.max(0, camX - W / 2) / maxCamX) * (bgTravelX * 0.25);
-      const bgY = (H - scaledH) / 2;
-
-      ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
-
-      const mistGrad = ctx.createLinearGradient(0, H * 0.55, 0, H);
-      mistGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      mistGrad.addColorStop(0.7, 'rgba(180, 205, 215, 0.12)');
-      mistGrad.addColorStop(1, 'rgba(30, 45, 35, 0.35)');
-      ctx.fillStyle = mistGrad;
-      ctx.fillRect(0, 0, W, H);
-    } else {
-      ctx.fillStyle = '#1A2E20';
-      ctx.fillRect(0, 0, W, H);
-    }
+    // 1. Stylized Jungle & Alpine Battlefield Backdrop (Authentic Doodle Army / Mini Militia Aesthetic)
+    this.drawStylizedBackdrop(ctx, W, H, camX, camY);
 
     // ──────────────── WORLD SPACE (DYNAMIC 1x-4x ZOOM) ────────────────
     ctx.save();
@@ -1524,83 +1501,27 @@ class MultiplayerGameApp {
     ctx.scale(this.currentZoom, this.currentZoom);
     ctx.translate(-camX, -camY);
 
-    // 2. Natural Terrain
+    // 2. Render Wooden Outpost Bunker Back-Wall & Interior First (Behind players)
+    this.drawWoodenOutpostBack(ctx, 1580, 840, 440, 240);
+
+    // 3. Render Rock Platforms & Ground Terrain
     for (const plat of this.platforms) {
       if (plat.type === 'GROUND') {
-        ctx.fillStyle = '#2C1B10';
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-
-        ctx.fillStyle = '#422A18';
-        ctx.fillRect(plat.x, plat.y, plat.w, 36);
-
-        ctx.fillStyle = '#388E3C';
-        ctx.fillRect(plat.x, plat.y, plat.w, 14);
-
-        ctx.fillStyle = '#66BB6A';
-        for (let x = 0; x < plat.w; x += 16) {
-          ctx.beginPath();
-          ctx.moveTo(x, plat.y);
-          ctx.lineTo(x + 4, plat.y - 7);
-          ctx.lineTo(x + 9, plat.y);
-          ctx.fill();
-        }
+        this.drawGroundTerrain(ctx, plat);
       } else if (plat.type === 'ROCK') {
-        ctx.save();
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-        ctx.fillRect(plat.x + 4, plat.y + plat.h, plat.w - 8, 12);
-
-        ctx.fillStyle = '#37474F';
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-
-        ctx.fillStyle = '#263238';
-        ctx.fillRect(plat.x, plat.y + plat.h - 12, plat.w, 12);
-
-        ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(plat.x, plat.y, plat.w, 8);
-
-        ctx.strokeStyle = '#1E272C';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.restore();
-      } else if (plat.type === 'HOUSE_ROOF') {
-        ctx.save();
-        ctx.fillStyle = '#263238';
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(plat.x, plat.y, plat.w, 10);
-        ctx.strokeStyle = '#FFD600';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.restore();
-      } else if (plat.type === 'HOUSE_WALL') {
-        ctx.save();
-        ctx.fillStyle = '#1E272C';
-        ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.strokeStyle = '#455A64';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.restore();
+        this.drawRockPlatform(ctx, plat);
       }
     }
 
-    // Central Vault Aura
-    ctx.save();
-    ctx.fillStyle = 'rgba(255, 214, 0, 0.08)';
-    ctx.fillRect(1626, 876, 348, 204);
-    ctx.font = 'bold 12px "Chakra Petch", sans-serif';
-    ctx.fillStyle = '#FFD600';
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = '#FFD600';
-    ctx.textAlign = 'center';
-    ctx.fillText('🏛️ RAREST WEAPON VAULT', 1800, 915);
-    ctx.restore();
+    // 4. Render Wooden Outpost Front Log Structure & Roof (3D Interlocking Timber Logs)
+    this.drawWoodenOutpostFront(ctx, 1580, 840, 440, 240);
 
-    // 3. Tactical Pickups
+    // 5. Tactical Pickups
     for (const pk of this.tacticalPickups) {
       if (pk.available) this.drawTacticalPickup(ctx, pk);
     }
 
-    // 4. Dropped Guns
+    // 6. Dropped Guns
     for (const gun of this.groundGuns) {
       if (gun.available) this.drawGroundGun(ctx, gun);
     }
@@ -1735,6 +1656,593 @@ class MultiplayerGameApp {
 
     // ──────────────── SCREEN SPACE: TACTICAL GAME CROSSHAIR ────────────────
     this.drawTacticalCrosshair(ctx, this.mouse.x, this.mouse.y);
+  }
+
+  // ──────────────── AUTHENTIC MINI MILITIA STYLIZED RENDERING ────────────────
+
+  // 1. Stylized Jungle & Alpine Battlefield Backdrop
+  drawStylizedBackdrop(ctx, W, H, camX, camY) {
+    // A. Soft Sky Gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+    skyGrad.addColorStop(0, '#7EC8E3');
+    skyGrad.addColorStop(0.45, '#BEE3ED');
+    skyGrad.addColorStop(0.85, '#E8F5E9');
+    skyGrad.addColorStop(1, '#C8E6C9');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // B. Distant Parallax Mountain Layer 1 (Far hills)
+    ctx.save();
+    const farOffsetX = -(camX * 0.06) % 900;
+    ctx.fillStyle = '#81C784';
+    ctx.beginPath();
+    ctx.moveTo(-100, H);
+    for (let x = -100; x <= W + 200; x += 180) {
+      const peakY = H * 0.38 + Math.sin((x - farOffsetX) * 0.005) * 55 + Math.cos((x - farOffsetX) * 0.012) * 35;
+      ctx.quadraticCurveTo(x + 90, peakY, x + 180, H * 0.42 + Math.sin((x + 180 - farOffsetX) * 0.006) * 45);
+    }
+    ctx.lineTo(W + 200, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // C. Midground Parallax Jungle Hills (Rounded Canopies & Treeline)
+    ctx.save();
+    const midOffsetX = -(camX * 0.14) % 800;
+    ctx.fillStyle = '#4CAF50';
+    ctx.beginPath();
+    ctx.moveTo(-100, H);
+    for (let x = -100; x <= W + 200; x += 140) {
+      const canopyY = H * 0.52 + Math.sin((x - midOffsetX) * 0.008) * 45 + Math.cos((x - midOffsetX) * 0.018) * 25;
+      // Draw rounded jungle tree canopy bumps
+      ctx.quadraticCurveTo(x + 70, canopyY - 30, x + 140, canopyY);
+    }
+    ctx.lineTo(W + 200, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // D. Foreground Lush Jungle Tree Canopy Foliage (Near Treeline)
+    ctx.save();
+    const nearOffsetX = -(camX * 0.22) % 600;
+    ctx.fillStyle = '#2E7D32';
+    ctx.beginPath();
+    ctx.moveTo(-100, H);
+    for (let x = -100; x <= W + 200; x += 110) {
+      const nearY = H * 0.65 + Math.sin((x - nearOffsetX) * 0.01) * 35;
+      ctx.quadraticCurveTo(x + 55, nearY - 25, x + 110, nearY);
+    }
+    ctx.lineTo(W + 200, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 2. Wooden Outpost Bunker: Back Wall & Interior (Rendered Behind Players)
+  drawWoodenOutpostBack(ctx, x, y, w, h) {
+    ctx.save();
+
+    // A. Vertical Weathered Wooden Planks
+    const plankWidth = 28;
+    const plankColors = ['#5D4037', '#6D4C41', '#54382F', '#4E342E', '#63453A'];
+    let colorIdx = 0;
+
+    for (let px = x + 34; px < x + w - 34; px += plankWidth) {
+      const curW = Math.min(plankWidth, (x + w - 34) - px);
+      ctx.fillStyle = plankColors[colorIdx % plankColors.length];
+      ctx.fillRect(px, y + 42, curW, h - 42);
+
+      // Plank Shadow / Separation Groove
+      ctx.strokeStyle = '#26170E';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px, y + 42);
+      ctx.lineTo(px, y + h);
+      ctx.stroke();
+
+      // Subtle Wood Grain Texture Lines
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px + curW * 0.3, y + 48);
+      ctx.bezierCurveTo(px + curW * 0.7, y + 90, px + curW * 0.2, y + 140, px + curW * 0.5, y + h - 10);
+      ctx.stroke();
+
+      // Iron Nails / Rivets
+      ctx.fillStyle = '#1A110B';
+      ctx.beginPath();
+      ctx.arc(px + curW / 2, y + 54, 2, 0, Math.PI * 2);
+      ctx.arc(px + curW / 2, y + h - 16, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      colorIdx++;
+    }
+
+    // B. 3 Iconic Bunker Window Openings (Sky view through windows)
+    const windows = [
+      { x: x + 72, y: y + 86, w: 68, h: 54 },
+      { x: x + 186, y: y + 86, w: 68, h: 54 },
+      { x: x + 300, y: y + 86, w: 68, h: 54 }
+    ];
+
+    for (const win of windows) {
+      // Sky Cutout View
+      const winSkyGrad = ctx.createLinearGradient(win.x, win.y, win.x, win.y + win.h);
+      winSkyGrad.addColorStop(0, '#7EC8E3');
+      winSkyGrad.addColorStop(1, '#A5D6A7');
+      ctx.fillStyle = winSkyGrad;
+      ctx.fillRect(win.x, win.y, win.w, win.h);
+
+      // Window Interior Drop Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(win.x, win.y, win.w, 8);
+      ctx.fillRect(win.x, win.y, 8, win.h);
+
+      // Vertical Iron Security Bars
+      ctx.strokeStyle = '#263238';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(win.x + win.w * 0.35, win.y);
+      ctx.lineTo(win.x + win.w * 0.35, win.y + win.h);
+      ctx.moveTo(win.x + win.w * 0.65, win.y);
+      ctx.lineTo(win.x + win.w * 0.65, win.y + win.h);
+      ctx.stroke();
+
+      // Metallic Bar Highlight
+      ctx.strokeStyle = '#78909C';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(win.x + win.w * 0.35 - 1, win.y);
+      ctx.lineTo(win.x + win.w * 0.35 - 1, win.y + win.h);
+      ctx.moveTo(win.x + win.w * 0.65 - 1, win.y);
+      ctx.lineTo(win.x + win.w * 0.65 - 1, win.y + win.h);
+      ctx.stroke();
+
+      // Heavy Wooden Window Frame Outline
+      ctx.strokeStyle = '#2A180E';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(win.x, win.y, win.w, win.h);
+    }
+
+    // C. Horizontal Wooden Cross-Beam Support
+    ctx.fillStyle = '#4E342E';
+    ctx.fillRect(x + 34, y + 154, w - 68, 24);
+    ctx.strokeStyle = '#21130B';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x + 34, y + 154, w - 68, 24);
+
+    // Cross-Beam Bolts
+    for (let bx = x + 50; bx < x + w - 50; bx += 40) {
+      ctx.fillStyle = '#78909C';
+      ctx.beginPath();
+      ctx.arc(bx, y + 166, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#1E272C';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // D. Hanging Ceiling Lantern & Warm Golden Bunker Glow
+    const lanternX = x + w / 2;
+    const lanternY = y + 50;
+
+    // Golden Radial Ambient Light
+    const lanternLight = ctx.createRadialGradient(lanternX, lanternY + 20, 10, lanternX, lanternY + 60, 160);
+    lanternLight.addColorStop(0, 'rgba(255, 214, 0, 0.35)');
+    lanternLight.addColorStop(0.5, 'rgba(255, 171, 0, 0.15)');
+    lanternLight.addColorStop(1, 'rgba(255, 171, 0, 0)');
+    ctx.fillStyle = lanternLight;
+    ctx.beginPath();
+    ctx.arc(lanternX, lanternY + 60, 160, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Lantern Chain & Cage
+    ctx.strokeStyle = '#37474F';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(lanternX, y + 42);
+    ctx.lineTo(lanternX, lanternY);
+    ctx.stroke();
+
+    // Lantern Body
+    ctx.fillStyle = '#FFD54F';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#FFD54F';
+    ctx.fillRect(lanternX - 6, lanternY, 12, 16);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#263238';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(lanternX - 6, lanternY, 12, 16);
+
+    // E. Heavy Wooden Weapon Supply Pedestal Table (Where Rocket Launcher Rests)
+    const pedX = x + w / 2 - 75;
+    const pedY = y + h - 45;
+    const pedW = 150;
+    const pedH = 45;
+
+    // Pedestal Body (Wooden Crate Chest)
+    ctx.fillStyle = '#5D4037';
+    ctx.fillRect(pedX, pedY, pedW, pedH);
+
+    // Diagonal Cross Braces
+    ctx.strokeStyle = '#3E2723';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(pedX + 6, pedY + 6);
+    ctx.lineTo(pedX + pedW - 6, pedY + pedH - 6);
+    ctx.moveTo(pedX + pedW - 6, pedY + 6);
+    ctx.lineTo(pedX + 6, pedY + pedH - 6);
+    ctx.stroke();
+
+    // Metal Corner Brackets & Rivets
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(pedX, pedY, 14, 14);
+    ctx.fillRect(pedX + pedW - 14, pedY, 14, 14);
+    ctx.fillRect(pedX, pedY + pedH - 14, 14, 14);
+    ctx.fillRect(pedX + pedW - 14, pedY + pedH - 14, 14, 14);
+
+    ctx.strokeStyle = '#1F130B';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(pedX, pedY, pedW, pedH);
+
+    // Golden Halo Ring on Pedestal Table
+    ctx.strokeStyle = '#FFD600';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#FFD600';
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, pedY + 4, 45, 10, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Outpost Banner Label
+    ctx.font = 'bold 11px "Chakra Petch", sans-serif';
+    ctx.fillStyle = '#FFD600';
+    ctx.textAlign = 'center';
+    ctx.fillText('★ OUTPOST BUNKER VAULT ★', x + w / 2, y + 74);
+
+    ctx.restore();
+  }
+
+  // 3. Wooden Outpost Bunker: Front 3D Interlocking Timber Logs & Roof
+  drawWoodenOutpostFront(ctx, x, y, w, h) {
+    ctx.save();
+
+    // ──────────────── A. TOP ROOF: 3D STACKED TIMBER LOGS ────────────────
+    const numRoofLogs = 3;
+    const logHeight = 14;
+
+    for (let i = 0; i < numRoofLogs; i++) {
+      const logY = y + i * logHeight;
+      const logStartX = x - 14;
+      const logEndX = x + w + 14;
+      const logW = logEndX - logStartX;
+
+      // 3D Cylindrical Log Gradient
+      const logGrad = ctx.createLinearGradient(0, logY, 0, logY + logHeight);
+      logGrad.addColorStop(0, '#BCAAA4');
+      logGrad.addColorStop(0.25, '#8D6E63');
+      logGrad.addColorStop(0.7, '#5D4037');
+      logGrad.addColorStop(1, '#3E2723');
+
+      ctx.fillStyle = logGrad;
+      ctx.fillRect(logStartX, logY, logW, logHeight);
+
+      // Bark Texture Lines & Knot Swirls
+      ctx.strokeStyle = 'rgba(30, 15, 8, 0.4)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(logStartX + 20, logY + 4);
+      ctx.lineTo(logStartX + logW * 0.45, logY + 4);
+      ctx.moveTo(logStartX + logW * 0.55, logY + 9);
+      ctx.lineTo(logStartX + logW - 20, logY + 9);
+      ctx.stroke();
+
+      // Circular Cut Log Ends (Left End)
+      ctx.fillStyle = '#D7CCC8';
+      ctx.beginPath();
+      ctx.ellipse(logStartX, logY + logHeight / 2, 8, logHeight / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#5D4037';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Tree Ring
+      ctx.beginPath();
+      ctx.ellipse(logStartX, logY + logHeight / 2, 4, (logHeight / 2) * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Circular Cut Log Ends (Right End)
+      ctx.fillStyle = '#D7CCC8';
+      ctx.beginPath();
+      ctx.ellipse(logEndX, logY + logHeight / 2, 8, logHeight / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#5D4037';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Tree Ring
+      ctx.beginPath();
+      ctx.ellipse(logEndX, logY + logHeight / 2, 4, (logHeight / 2) * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Black Cartoon Contour Outline
+      ctx.strokeStyle = '#1F130B';
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(logStartX, logY, logW, logHeight);
+    }
+
+    // Green Moss / Comic Grass on Top of the Roof Logs
+    ctx.fillStyle = '#7CB342';
+    for (let gx = x - 10; gx <= x + w + 10; gx += 14) {
+      ctx.beginPath();
+      ctx.moveTo(gx, y);
+      ctx.lineTo(gx + 4, y - 6);
+      ctx.lineTo(gx + 8, y);
+      ctx.fill();
+      ctx.strokeStyle = '#1F130B';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // ──────────────── B. SUPPORT COLUMNS (STACKED VERTICAL LOGS) ────────────────
+    const colWidth = 38;
+    const colHeight = 84; // Leaves lower opening for walking inside!
+
+    // Left Column
+    this.drawVerticalLogPillar(ctx, x, y + 42, colWidth, colHeight, true);
+
+    // Right Column
+    this.drawVerticalLogPillar(ctx, x + w - colWidth, y + 42, colWidth, colHeight, false);
+
+    // Diagonal 45° Timber Braces Under Roof
+    this.drawDiagonalTimberStrut(ctx, x + colWidth, y + 42, 40, 40, true);
+    this.drawDiagonalTimberStrut(ctx, x + w - colWidth - 40, y + 42, 40, 40, false);
+
+    ctx.restore();
+  }
+
+  // Helper: Draw Vertical Stacked Log Pillar
+  drawVerticalLogPillar(ctx, px, py, pw, ph, isLeft) {
+    ctx.save();
+
+    // Vertical Log Cylinder Gradient
+    const colGrad = ctx.createLinearGradient(px, 0, px + pw, 0);
+    colGrad.addColorStop(0, '#BCAAA4');
+    colGrad.addColorStop(0.3, '#8D6E63');
+    colGrad.addColorStop(0.8, '#5D4037');
+    colGrad.addColorStop(1, '#3E2723');
+
+    ctx.fillStyle = colGrad;
+    ctx.fillRect(px, py, pw, ph);
+
+    // Bark Texture
+    ctx.strokeStyle = 'rgba(25, 12, 6, 0.4)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(px + pw * 0.35, py + 8);
+    ctx.lineTo(px + pw * 0.35, py + ph - 8);
+    ctx.moveTo(px + pw * 0.7, py + 16);
+    ctx.lineTo(px + pw * 0.7, py + ph - 16);
+    ctx.stroke();
+
+    // Circular Cut Log Notches along the Pillar
+    for (let ny = py + 16; ny <= py + ph - 16; ny += 28) {
+      const notchX = isLeft ? px - 4 : px + pw + 4;
+      ctx.fillStyle = '#D7CCC8';
+      ctx.beginPath();
+      ctx.arc(notchX, ny, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#5D4037';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(notchX, ny, 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#1F130B';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Steel Reinforcement Corner Band
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(px - 2, py + ph - 14, pw + 4, 10);
+    ctx.fillStyle = '#CFD8DC';
+    ctx.beginPath();
+    ctx.arc(px + 8, py + ph - 9, 2.5, 0, Math.PI * 2);
+    ctx.arc(px + pw - 8, py + ph - 9, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Black Cartoon Outline
+    ctx.strokeStyle = '#1F130B';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(px, py, pw, ph);
+
+    ctx.restore();
+  }
+
+  // Helper: Draw Diagonal Timber Strut Brace
+  drawDiagonalTimberStrut(ctx, sx, sy, sw, sh, isLeft) {
+    ctx.save();
+    ctx.fillStyle = '#6D4C41';
+    ctx.beginPath();
+    if (isLeft) {
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + sw, sy);
+      ctx.lineTo(sx, sy + sh);
+    } else {
+      ctx.moveTo(sx + sw, sy);
+      ctx.lineTo(sx, sy);
+      ctx.lineTo(sx + sw, sy + sh);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Iron Carriage Bolt
+    ctx.fillStyle = '#90A4AE';
+    ctx.beginPath();
+    ctx.arc(isLeft ? sx + 12 : sx + sw - 12, sy + 12, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#1F130B';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 4. Natural Rock Platform (Authentic Hand-Drawn Earthy Stones & Cartoon Grass)
+  drawRockPlatform(ctx, plat) {
+    ctx.save();
+
+    // A. Drop Shadow Beneath Platform
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.roundRect(plat.x + 4, plat.y + plat.h, plat.w - 8, 14, 6);
+    ctx.fill();
+
+    // B. Earthy Rock Stone Polygon Body
+    const rockGrad = ctx.createLinearGradient(0, plat.y, 0, plat.y + plat.h);
+    rockGrad.addColorStop(0, '#948472');
+    rockGrad.addColorStop(0.4, '#7D6E5D');
+    rockGrad.addColorStop(1, '#5E5042');
+
+    ctx.fillStyle = rockGrad;
+    ctx.beginPath();
+    ctx.roundRect(plat.x, plat.y, plat.w, plat.h, 6);
+    ctx.fill();
+
+    // C. Stone Fissure & Crack Lines
+    ctx.strokeStyle = '#3E342B';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(plat.x + plat.w * 0.25, plat.y + 10);
+    ctx.lineTo(plat.x + plat.w * 0.28, plat.y + 22);
+    ctx.lineTo(plat.x + plat.w * 0.35, plat.y + 28);
+    ctx.moveTo(plat.x + plat.w * 0.68, plat.y + 8);
+    ctx.lineTo(plat.x + plat.w * 0.72, plat.y + 24);
+    ctx.stroke();
+
+    // D. Embedded Rounded River Stones / Pebbles (Along Bottom & Sides)
+    const pebbleOffsets = [
+      { x: 12, y: plat.h - 4, r: 8 },
+      { x: 34, y: plat.h - 2, r: 6 },
+      { x: 62, y: plat.h - 5, r: 9 },
+      { x: plat.w * 0.45, y: plat.h - 3, r: 7 },
+      { x: plat.w * 0.60, y: plat.h - 5, r: 9 },
+      { x: plat.w * 0.78, y: plat.h - 3, r: 7 },
+      { x: plat.w - 38, y: plat.h - 4, r: 8 },
+      { x: plat.w - 14, y: plat.h - 2, r: 6 }
+    ];
+
+    for (const p of pebbleOffsets) {
+      if (p.x < plat.w) {
+        ctx.fillStyle = '#B5A593';
+        ctx.beginPath();
+        ctx.arc(plat.x + p.x, plat.y + p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shaded Rim
+        ctx.fillStyle = '#6E5F50';
+        ctx.beginPath();
+        ctx.arc(plat.x + p.x + 1.5, plat.y + p.y + 1.5, p.r * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#2A2219';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(plat.x + p.x, plat.y + p.y, p.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // E. Heavy Black Cartoon Contour Outline
+    ctx.strokeStyle = '#2A2219';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(plat.x, plat.y, plat.w, plat.h, 6);
+    ctx.stroke();
+
+    // F. Thick Vibrant Multi-Layered Cartoon Grass on Top
+    // Layer 1: Dark Green Under-Shadow Grass
+    ctx.fillStyle = '#33691E';
+    for (let gx = plat.x; gx <= plat.x + plat.w - 6; gx += 10) {
+      ctx.beginPath();
+      ctx.moveTo(gx, plat.y + 2);
+      ctx.lineTo(gx + 4, plat.y - 8);
+      ctx.lineTo(gx + 8, plat.y + 2);
+      ctx.fill();
+    }
+
+    // Layer 2: Bright Vibrant Lime Grass Blades with Black Outline
+    ctx.fillStyle = '#7CB342';
+    for (let gx = plat.x; gx <= plat.x + plat.w - 8; gx += 12) {
+      ctx.beginPath();
+      ctx.moveTo(gx, plat.y);
+      ctx.lineTo(gx + 5, plat.y - 10);
+      ctx.lineTo(gx + 10, plat.y);
+      ctx.fill();
+
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // 5. Natural Ground Terrain (Deep Subterranean Earth & Continuous Top Grass)
+  drawGroundTerrain(ctx, plat) {
+    ctx.save();
+
+    // A. Subterranean Soil Strata Layers
+    // Layer 1: Deep Bedrock
+    ctx.fillStyle = '#211007';
+    ctx.fillRect(plat.x, plat.y + 45, plat.w, plat.h - 45);
+
+    // Layer 2: Rich Mid Soil
+    ctx.fillStyle = '#321C0E';
+    ctx.fillRect(plat.x, plat.y + 18, plat.w, 28);
+
+    // Layer 3: Top Organic Humus Layer
+    ctx.fillStyle = '#4A2E19';
+    ctx.fillRect(plat.x, plat.y, plat.w, 18);
+
+    // B. Embedded Rock Strata & Mineral Pebbles in Soil
+    ctx.fillStyle = '#7D6E5D';
+    for (let sx = 0; sx < plat.w; sx += 85) {
+      ctx.beginPath();
+      ctx.arc(plat.x + sx + 25, plat.y + 35, 7, 0, Math.PI * 2);
+      ctx.arc(plat.x + sx + 65, plat.y + 65, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#211007';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    // C. Continuous Stylized Cartoon Grass Along Ground Ridge
+    // Dark base grass
+    ctx.fillStyle = '#33691E';
+    for (let gx = 0; gx < plat.w; gx += 8) {
+      ctx.beginPath();
+      ctx.moveTo(plat.x + gx, plat.y);
+      ctx.lineTo(plat.x + gx + 3, plat.y - 7);
+      ctx.lineTo(plat.x + gx + 7, plat.y);
+      ctx.fill();
+    }
+
+    // Bright primary grass blades
+    ctx.fillStyle = '#689F38';
+    for (let gx = 0; gx < plat.w; gx += 11) {
+      ctx.beginPath();
+      ctx.moveTo(plat.x + gx, plat.y);
+      ctx.lineTo(plat.x + gx + 4, plat.y - 11);
+      ctx.lineTo(plat.x + gx + 9, plat.y);
+      ctx.fill();
+
+      ctx.strokeStyle = '#1B5E20';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   // ──────────────── TACTICAL CROSSHAIR DRAWING ────────────────
