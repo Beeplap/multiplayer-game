@@ -141,24 +141,81 @@ class MultiplayerGameApp {
     }
   }
 
-  getHumanServerName() {
+  async detectServerLocation() {
     const host = (window.location.hostname || '').toLowerCase();
     if (!host || host === 'localhost' || host === '127.0.0.1') {
-      return 'LOCALHOST';
-    }
-    if (host.includes('trycloudflare.com') || host.includes('cloudflare')) {
-      return 'CLOUDFLARE NETWORK';
-    }
-    if (host.includes('onrender.com') || host.includes('render')) {
-      return 'RENDER CLOUD';
-    }
-    if (host.includes('loca.lt') || host.includes('localtunnel')) {
-      return 'LOCALTUNNEL';
+      return 'LOCALHOST (DEV)';
     }
     if (host.startsWith('192.168.') || host.startsWith('10.') || host.startsWith('172.')) {
       return `LOCAL WI-FI (${host})`;
     }
+
+    const COLO_CITIES = {
+      BOM: 'MUMBAI',
+      KTM: 'KATHMANDU',
+      CCU: 'KOLKATA',
+      DEL: 'NEW DELHI',
+      HYD: 'HYDERABAD',
+      BLR: 'BENGALURU',
+      MAA: 'CHENNAI',
+      SIN: 'SINGAPORE',
+      DXB: 'DUBAI',
+      LHR: 'LONDON',
+      FRA: 'FRANKFURT',
+      IAD: 'VIRGINIA (US)',
+      ORD: 'CHICAGO (US)',
+      SJC: 'SAN JOSE (US)',
+      LAX: 'LOS ANGELES',
+      NRT: 'TOKYO',
+      HKG: 'HONG KONG',
+      BKK: 'BANGKOK'
+    };
+
+    // 1. Direct Cloudflare Edge Trace (Reads nearest Point of Presence airport code)
+    if (host.includes('trycloudflare.com') || host.includes('cloudflare')) {
+      try {
+        const res = await fetch('/cdn-cgi/trace');
+        if (res.ok) {
+          const text = await res.text();
+          const matchColo = text.match(/colo=([A-Z]{3})/i);
+          const matchLoc = text.match(/loc=([A-Z]{2})/i);
+          if (matchColo && matchColo[1]) {
+            const colo = matchColo[1].toUpperCase();
+            const city = COLO_CITIES[colo] || colo;
+            const country = matchLoc && matchLoc[1] ? `, ${matchLoc[1].toUpperCase()}` : '';
+            return `CLOUDFLARE (${city}${country})`;
+          }
+        }
+      } catch (e) {}
+      return 'CLOUDFLARE (MUMBAI/ASIA)';
+    }
+
+    // 2. Server-Side Geo API Fallback
+    try {
+      const res = await fetch('/api/server-info');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.colo && COLO_CITIES[data.colo.toUpperCase()]) {
+          return `CLOUDFLARE (${COLO_CITIES[data.colo.toUpperCase()]})`;
+        }
+      }
+    } catch (e) {}
+
+    if (host.includes('onrender.com') || host.includes('render')) {
+      return 'RENDER CLOUD (FRANKFURT/US)';
+    }
+    if (host.includes('loca.lt') || host.includes('localtunnel')) {
+      return 'LOCALTUNNEL (US RELAY)';
+    }
     return host.toUpperCase();
+  }
+
+  async updateServerStatusUI(wsUrl) {
+    if (this.serverAddressTextEl) {
+      const locationText = await this.detectServerLocation();
+      this.serverAddressTextEl.textContent = `${locationText} • ONLINE`;
+      this.serverAddressTextEl.title = `WebSocket: ${wsUrl}`;
+    }
   }
 
   initWebSocket() {
@@ -174,11 +231,7 @@ class MultiplayerGameApp {
       this.ws.onopen = () => {
         console.log('⚡ Connected to Game Server:', wsUrl);
         if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot online';
-        if (this.serverAddressTextEl) {
-          const serverName = this.getHumanServerName();
-          this.serverAddressTextEl.textContent = `${serverName} • ONLINE`;
-          this.serverAddressTextEl.title = `WebSocket Endpoint: ${wsUrl}`;
-        }
+        this.updateServerStatusUI(wsUrl);
 
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
 

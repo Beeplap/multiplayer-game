@@ -18,9 +18,22 @@ if (!fs.existsSync(clientPath)) {
 }
 app.use(express.static(clientPath));
 
-// Health check endpoint
+// Health & Geo-Location Info endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'online', uptime: process.uptime(), lobbies: lobbies.size });
+});
+
+app.get('/api/server-info', (req, res) => {
+  const cfRay = req.headers['cf-ray'];
+  const cfIpCountry = req.headers['cf-ipcountry'];
+  const cfRayColo = cfRay ? cfRay.split('-')[1] : null;
+
+  res.status(200).json({
+    status: 'online',
+    port: PORT,
+    colo: cfRayColo || null,
+    country: cfIpCountry || null
+  });
 });
 
 const server = http.createServer(app);
