@@ -524,6 +524,19 @@ class MultiplayerGameApp {
     return plat.y;
   }
 
+  getTopSurfaceY(worldX) {
+    let highestY = this.getGroundYAt(worldX);
+    for (const plat of this.platforms) {
+      if (plat.type !== 'GROUND' && worldX >= plat.x && worldX <= plat.x + plat.w) {
+        const topY = this.getPlatformTopY(plat, worldX);
+        if (topY < highestY) {
+          highestY = topY;
+        }
+      }
+    }
+    return highestY;
+  }
+
   buildNaturalMap() {
     const gy = this.groundY;
 
@@ -567,24 +580,24 @@ class MultiplayerGameApp {
       }
     ];
 
-    // Natural Hand-Drawn Palm Trees (Scattered Across Hills, Islands & Valley)
+    // Natural Hand-Drawn Palm Trees (Firmly Rooted on Top Surfaces of High Peaks & Ground Mounds)
     this.sceneryTrees = [
-      { x: 160, height: 110, scale: 1.0, lean: -0.07, hasBoulders: true },
-      { x: 420, height: 125, scale: 1.05, lean: 0.05, hasBoulders: true, platIdx: 1 },
-      { x: 930, height: 130, scale: 1.1, lean: -0.06, hasBoulders: true, platIdx: 3 },
-      { x: 1380, height: 115, scale: 0.95, lean: 0.08, hasBoulders: true },
-      { x: 2120, height: 115, scale: 0.95, lean: -0.08, hasBoulders: true },
-      { x: 2630, height: 125, scale: 1.05, lean: 0.06, hasBoulders: true, platIdx: 7 },
-      { x: 3170, height: 135, scale: 1.12, lean: -0.05, hasBoulders: true, platIdx: 9 }
+      { x: 180, height: 115, scale: 1.0, lean: -0.06, hasBoulders: true },
+      { x: 600, height: 125, scale: 1.05, lean: 0.05, hasBoulders: true },
+      { x: 1220, height: 130, scale: 1.1, lean: -0.05, hasBoulders: true },
+      { x: 1420, height: 110, scale: 0.95, lean: 0.07, hasBoulders: true },
+      { x: 2120, height: 110, scale: 0.95, lean: -0.07, hasBoulders: true },
+      { x: 2640, height: 125, scale: 1.05, lean: 0.06, hasBoulders: true },
+      { x: 3200, height: 135, scale: 1.12, lean: -0.05, hasBoulders: true }
     ];
 
     // Extra Surface Boulder Clusters on Natural Hills & Ridges
     this.surfaceBoulders = [
-      { x: 310, count: 3, scale: 1.1 },
-      { x: 740, count: 2, scale: 0.9 },
+      { x: 340, count: 3, scale: 1.1 },
+      { x: 920, count: 2, scale: 0.9 },
       { x: 1240, count: 3, scale: 1.0 },
       { x: 2320, count: 2, scale: 1.0 },
-      { x: 2820, count: 3, scale: 1.2 },
+      { x: 2880, count: 3, scale: 1.2 },
       { x: 3340, count: 2, scale: 0.95 }
     ];
   }
@@ -2732,21 +2745,18 @@ class MultiplayerGameApp {
 
   // 4. World Scenery Dispatcher (Palm Trees & Surface Boulders)
   drawWorldScenery(ctx) {
-    // A. Surface Boulder Clusters
+    // A. Surface Boulder Clusters (Placed on Top-Most Surface)
     if (this.surfaceBoulders) {
       for (const b of this.surfaceBoulders) {
-        const baseY = this.getGroundYAt(b.x);
+        const baseY = this.getTopSurfaceY(b.x);
         this.drawBoulderCluster(ctx, b.x, baseY, b.count, b.scale);
       }
     }
 
-    // B. Natural Hand-Drawn Palm Trees
+    // B. Natural Hand-Drawn Palm Trees (Firmly Rooted on Top-Most Island/Hill Surface)
     if (this.sceneryTrees) {
       for (const tree of this.sceneryTrees) {
-        let baseY = this.getGroundYAt(tree.x);
-        if (tree.platIdx !== undefined && this.platforms[tree.platIdx]) {
-          baseY = this.getPlatformTopY(this.platforms[tree.platIdx], tree.x);
-        }
+        const baseY = this.getTopSurfaceY(tree.x);
         this.drawPalmTree(ctx, tree.x, baseY, tree.height, tree.scale, tree.lean);
       }
     }
