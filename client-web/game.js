@@ -1180,10 +1180,13 @@ class MultiplayerGameApp {
     if (this.localPlayer.isDead) return;
     this.localPlayer.isDead = true;
     this.localPlayer.hp = 0;
+    this.localPlayer.vx = 0;
+    this.localPlayer.vy = 0;
+    this.keys = {}; // Clear stuck keypresses
 
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 20; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 3 + Math.random() * 8;
+      const speed = 3 + Math.random() * 7;
       this.particles.push({
         x: this.localPlayer.x,
         y: this.localPlayer.y,
@@ -1191,7 +1194,7 @@ class MultiplayerGameApp {
         vy: Math.sin(angle) * speed,
         color: '#FF3366',
         alpha: 1.0,
-        radius: 4 + Math.random() * 4
+        radius: 3 + Math.random() * 3
       });
     }
 
@@ -1201,11 +1204,13 @@ class MultiplayerGameApp {
       weapon
     });
 
+    if (this.deathCountdown) clearInterval(this.deathCountdown);
     this.respawnTimer = 3;
-    const countdown = setInterval(() => {
+    this.deathCountdown = setInterval(() => {
       this.respawnTimer--;
       if (this.respawnTimer <= 0) {
-        clearInterval(countdown);
+        clearInterval(this.deathCountdown);
+        this.deathCountdown = null;
         this.respawnLocalPlayer();
       }
     }, 1000);
@@ -1214,8 +1219,9 @@ class MultiplayerGameApp {
   respawnLocalPlayer() {
     this.localPlayer.hp = 100;
     this.localPlayer.isDead = false;
-    this.localPlayer.x = 700 + Math.random() * 1200;
-    this.localPlayer.y = 800;
+    this.localPlayer.x = 600 + Math.random() * 1400;
+    const gY = this.getGroundYAt(this.localPlayer.x);
+    this.localPlayer.y = Math.max(300, gY - 180);
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
     this.localPlayer.inventory = { grenades: 2, mines: 1, toxic_gas: 1 };
@@ -1223,6 +1229,10 @@ class MultiplayerGameApp {
     this.hudWeaponName.textContent = 'DUAL SMG UZI';
     this.setZoomLevel(0, true);
     this.updateTacticalHUD();
+
+    // Re-center camera smoothly on respawn
+    this.camera.x = this.localPlayer.x;
+    this.camera.y = this.localPlayer.y;
 
     this.send('RESPAWN_REQUEST', {
       x: Math.round(this.localPlayer.x),
@@ -1296,126 +1306,128 @@ class MultiplayerGameApp {
 
   updatePhysics() {
     const p = this.localPlayer;
-    if (p.isDead || p.hp <= 0) return;
-
-    let moveX = 0;
-    let thrustY = 0;
-
-    if (this.keys['a'] || this.keys['arrowleft']) moveX -= 1;
-    if (this.keys['d'] || this.keys['arrowright']) moveX += 1;
-    if (this.keys['w'] || this.keys['arrowup'] || this.keys[' ']) thrustY -= 1;
-
-    if (this.touchJoyLeft.active) {
-      moveX = this.touchJoyLeft.vx;
-      if (this.touchJoyLeft.vy < -0.15) thrustY = this.touchJoyLeft.vy;
-    }
-
-    // Balanced Tactical Movement Physics (Crisp, controllable, non-slippery)
-    p.vx += moveX * 0.58;
-    p.vx *= 0.86;
-
-    if (Math.abs(p.vx) > 0.3 && p.isGrounded) {
-      this.walkCycle += Math.abs(p.vx) * 0.22;
-    }
-
-    p.vy += 0.38;
-
-    if (thrustY < 0) {
-      p.vy -= 0.76;
-      p.vy = Math.max(-6.5, p.vy);
-      p.isFlying = true;
-      p.isGrounded = false;
-      this.spawnJetpackParticle(p.x, p.y + 16, p.aimAngle);
-    } else {
-      p.isFlying = false;
-    }
-
-    p.vy = Math.min(7.5, p.vy);
-
-    p.x += p.vx;
-    p.y += p.vy;
-
-    // ──────────────── WORLD BOUNDARIES & ORGANIC TERRAIN LANDING ────────────────
     const soldierRadius = 22;
-    const curGroundY = this.getGroundYAt(p.x);
 
-    if (p.x - soldierRadius < 10) { p.x = 10 + soldierRadius; p.vx = 0; }
-    if (p.x + soldierRadius > this.worldWidth - 10) { p.x = this.worldWidth - 10 - soldierRadius; p.vx = 0; }
-    if (p.y - soldierRadius < 15) { p.y = 15 + soldierRadius; p.vy = 0; }
+    // ──────────────── LOCAL PLAYER MOVEMENT SIMULATION (ONLY ACTIVE WHEN ALIVE) ────────────────
+    if (!p.isDead && p.hp > 0) {
+      let moveX = 0;
+      let thrustY = 0;
 
-    // Organic Ground Landing
-    if (p.y + soldierRadius > curGroundY) {
-      p.y = curGroundY - soldierRadius;
-      p.vy = 0;
-      p.isGrounded = true;
-    } else {
-      p.isGrounded = p.y + soldierRadius >= curGroundY - 3;
-    }
+      if (this.keys['a'] || this.keys['arrowleft']) moveX -= 1;
+      if (this.keys['d'] || this.keys['arrowright']) moveX += 1;
+      if (this.keys['w'] || this.keys['arrowup'] || this.keys[' ']) thrustY -= 1;
 
-    // ──────────────── 4-WAY SOLID OBSTACLE & PLATFORM COLLISION ────────────────
-    for (const plat of this.platforms) {
-      if (plat.type === 'GROUND') continue;
-
-      const platLeft = plat.x;
-      const platRight = plat.x + plat.w;
-
-      // Calculate exact top and bottom bounds at current player X
-      let topY, botY;
-      if (plat.type === 'ROCK') {
-        const progress = Math.max(0, Math.min(1, (p.x - plat.x) / plat.w));
-        topY = this.getPlatformTopY(plat, p.x);
-        botY = plat.y + plat.h + Math.sin(progress * Math.PI) * 35 + 6;
-      } else {
-        topY = plat.y;
-        botY = plat.y + plat.h;
+      if (this.touchJoyLeft.active) {
+        moveX = this.touchJoyLeft.vx;
+        if (this.touchJoyLeft.vy < -0.15) thrustY = this.touchJoyLeft.vy;
       }
 
-      // Check if player is horizontally overlapping with obstacle
-      if (p.x + soldierRadius > platLeft && p.x - soldierRadius < platRight) {
-        // 1. Landing on Top Surface (from above)
-        if (p.y + soldierRadius >= topY && p.y + soldierRadius <= topY + 28 && p.vy >= 0) {
-          p.y = topY - soldierRadius;
-          p.vy = 0;
-          p.isGrounded = true;
+      // Balanced Tactical Movement Physics (Crisp, controllable, non-slippery)
+      p.vx += moveX * 0.58;
+      p.vx *= 0.86;
+
+      if (Math.abs(p.vx) > 0.3 && p.isGrounded) {
+        this.walkCycle += Math.abs(p.vx) * 0.22;
+      }
+
+      p.vy += 0.38;
+
+      if (thrustY < 0) {
+        p.vy -= 0.76;
+        p.vy = Math.max(-6.5, p.vy);
+        p.isFlying = true;
+        p.isGrounded = false;
+        this.spawnJetpackParticle(p.x, p.y + 16, p.aimAngle);
+      } else {
+        p.isFlying = false;
+      }
+
+      p.vy = Math.min(7.5, p.vy);
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // ──────────────── WORLD BOUNDARIES & ORGANIC TERRAIN LANDING ────────────────
+      const curGroundY = this.getGroundYAt(p.x);
+
+      if (p.x - soldierRadius < 10) { p.x = 10 + soldierRadius; p.vx = 0; }
+      if (p.x + soldierRadius > this.worldWidth - 10) { p.x = this.worldWidth - 10 - soldierRadius; p.vx = 0; }
+      if (p.y - soldierRadius < 15) { p.y = 15 + soldierRadius; p.vy = 0; }
+
+      // Organic Ground Landing
+      if (p.y + soldierRadius > curGroundY) {
+        p.y = curGroundY - soldierRadius;
+        p.vy = 0;
+        p.isGrounded = true;
+      } else {
+        p.isGrounded = p.y + soldierRadius >= curGroundY - 3;
+      }
+
+      // ──────────────── 4-WAY SOLID OBSTACLE & PLATFORM COLLISION ────────────────
+      for (const plat of this.platforms) {
+        if (plat.type === 'GROUND') continue;
+
+        const platLeft = plat.x;
+        const platRight = plat.x + plat.w;
+
+        // Calculate exact top and bottom bounds at current player X
+        let topY, botY;
+        if (plat.type === 'ROCK') {
+          const progress = Math.max(0, Math.min(1, (p.x - plat.x) / plat.w));
+          topY = this.getPlatformTopY(plat, p.x);
+          botY = plat.y + plat.h + Math.sin(progress * Math.PI) * 35 + 6;
+        } else {
+          topY = plat.y;
+          botY = plat.y + plat.h;
         }
-        // 2. Hitting Bottom Underside (from below - NO CLIPPING THROUGH FROM BELOW!)
-        else if (p.y - soldierRadius <= botY && p.y - soldierRadius >= botY - 26 && p.vy < 0) {
-          p.y = botY + soldierRadius;
-          p.vy = Math.max(0, p.vy); // Stop upward thrust immediately
-        }
-        // 3. Trapped Inside Obstacle Core -> Resolve cleanly to nearest surface
-        else if (p.y + soldierRadius > topY && p.y - soldierRadius < botY) {
-          const distToTop = Math.abs((p.y + soldierRadius) - topY);
-          const distToBot = Math.abs((p.y - soldierRadius) - botY);
-          if (distToTop < distToBot) {
+
+        // Check if player is horizontally overlapping with obstacle
+        if (p.x + soldierRadius > platLeft && p.x - soldierRadius < platRight) {
+          // 1. Landing on Top Surface (from above)
+          if (p.y + soldierRadius >= topY && p.y + soldierRadius <= topY + 28 && p.vy >= 0) {
             p.y = topY - soldierRadius;
             p.vy = 0;
             p.isGrounded = true;
-          } else {
+          }
+          // 2. Hitting Bottom Underside (from below - NO CLIPPING THROUGH FROM BELOW!)
+          else if (p.y - soldierRadius <= botY && p.y - soldierRadius >= botY - 26 && p.vy < 0) {
             p.y = botY + soldierRadius;
-            p.vy = Math.max(0, p.vy);
+            p.vy = Math.max(0, p.vy); // Stop upward thrust immediately
+          }
+          // 3. Trapped Inside Obstacle Core -> Resolve cleanly to nearest surface
+          else if (p.y + soldierRadius > topY && p.y - soldierRadius < botY) {
+            const distToTop = Math.abs((p.y + soldierRadius) - topY);
+            const distToBot = Math.abs((p.y - soldierRadius) - botY);
+            if (distToTop < distToBot) {
+              p.y = topY - soldierRadius;
+              p.vy = 0;
+              p.isGrounded = true;
+            } else {
+              p.y = botY + soldierRadius;
+              p.vy = Math.max(0, p.vy);
+            }
+          }
+        }
+
+        // Lateral (Left/Right) Wall Collision for Obstacles
+        if (p.y + soldierRadius > topY + 6 && p.y - soldierRadius < botY - 6) {
+          if (p.x + soldierRadius >= platLeft && p.x + soldierRadius <= platLeft + 16 && p.vx > 0) {
+            p.x = platLeft - soldierRadius;
+            p.vx = 0;
+          } else if (p.x - soldierRadius <= platRight && p.x - soldierRadius >= platRight - 16 && p.vx < 0) {
+            p.x = platRight + soldierRadius;
+            p.vx = 0;
           }
         }
       }
 
-      // Lateral (Left/Right) Wall Collision for Obstacles
-      if (p.y + soldierRadius > topY + 6 && p.y - soldierRadius < botY - 6) {
-        if (p.x + soldierRadius >= platLeft && p.x + soldierRadius <= platLeft + 16 && p.vx > 0) {
-          p.x = platLeft - soldierRadius;
-          p.vx = 0;
-        } else if (p.x - soldierRadius <= platRight && p.x - soldierRadius >= platRight - 16 && p.vx < 0) {
-          p.x = platRight + soldierRadius;
-          p.vx = 0;
-        }
+      if (this.touchJoyRight.isAiming) {
+        p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
+      } else {
+        const worldMouseX = this.camera.x + (this.mouse.x - this.canvas.width / 2) / this.currentZoom;
+        const worldMouseY = this.camera.y + (this.mouse.y - this.canvas.height / 2) / this.currentZoom;
+        p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
       }
-    }
-
-    if (this.touchJoyRight.isAiming) {
-      p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
-    } else {
-      const worldMouseX = this.camera.x + (this.mouse.x - this.canvas.width / 2) / this.currentZoom;
-      const worldMouseY = this.camera.y + (this.mouse.y - this.canvas.height / 2) / this.currentZoom;
-      p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
     // ──────────────── NETWORK LAG-COMPENSATED SNAPSHOT INTERPOLATION (ZERO DESYNC) ────────────────
