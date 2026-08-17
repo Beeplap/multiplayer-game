@@ -63,7 +63,7 @@
         </div>
 
         <div class="quick-info-box">
-          <span>🚀 Infinite Flight • ☣️ Toxic Gas • 🎯 [Q] Switch [F] Throw • 💥 [E] Equip Gun</span>
+          <span>🚀 Infinite Flight • 🔍 [Shift] 1x-4x Zoom • 🎯 [Q] Switch [F] Throw • 💥 [E] Equip Gun</span>
         </div>
       </div>
     </div>
@@ -162,12 +162,19 @@
           <div class="score-team blue"><span id="score-blue">0</span></div>
         </div>
 
-        <!-- Top Right Weapon Status & Fullscreen Toggle -->
+        <!-- Top Right Weapon Status, Dynamic Zoom & Fullscreen -->
         <div class="hud-top-right">
           <div class="weapon-card">
             <span id="hud-weapon-name" class="weapon-name">DUAL SMG UZI</span>
             <span class="ammo-count highlight">∞ UNLIMITED</span>
           </div>
+
+          <!-- Dynamic 1x-4x Zoom Level Toggle (Key: Shift) -->
+          <button id="btn-zoom-toggle" class="btn-zoom-badge" title="Toggle Zoom Level 1x-4x (Key: Shift)">
+            <span class="zoom-icon">🔍</span>
+            <span id="zoom-val-text">1x</span>
+          </button>
+
           <button id="btn-fullscreen-toggle" class="btn-icon-small" title="Toggle Fullscreen">⛶</button>
           <button id="btn-exit-game" class="btn-icon-small danger" title="Exit to Lobby">✕</button>
         </div>
@@ -213,7 +220,7 @@
         <canvas id="game-canvas"></canvas>
       </div>
 
-      <!-- Mobile Touch Dual-Stick Controls (Automatically hidden on desktop, positioned ergonomically) -->
+      <!-- Mobile Touch Dual-Stick Controls -->
       <div class="touch-controls" id="touch-controls">
         <!-- Left Joystick: Movement & Upward Jetpack Thrust -->
         <div class="joystick-zone left" id="joy-left-zone">

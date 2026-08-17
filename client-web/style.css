@@ -680,6 +680,33 @@ input[type="text"]:focus {
   color: var(--accent-cyan);
 }
 
+/* Dynamic Zoom Button */
+.btn-zoom-badge {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1.5px solid rgba(0, 229, 255, 0.4);
+  color: var(--accent-cyan);
+  border-radius: 8px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.btn-zoom-badge:active {
+  transform: scale(0.92);
+  background: rgba(0, 229, 255, 0.25);
+}
+
+.zoom-icon {
+  font-size: 12px;
+}
+
 /* ──────────────── BOTTOM-LEFT PING DISPLAY ──────────────── */
 .hud-bottom-left {
   position: absolute;

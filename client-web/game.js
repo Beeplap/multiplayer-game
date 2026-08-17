@@ -22,6 +22,17 @@ class MultiplayerGameApp {
     this.respawnTimer = 0;
     this.toxicDamageTick = 0;
 
+    // Dynamic 1x-4x Zoom System
+    this.zoomPresets = [
+      { label: '1x', scale: 1.0 },
+      { label: '2x', scale: 0.72 },
+      { label: '3x', scale: 0.50 },
+      { label: '4x', scale: 0.35 }
+    ];
+    this.zoomIndex = 0;
+    this.currentZoom = 1.0;
+    this.targetZoom = 1.0;
+
     this.initDOM();
     this.detectTouchDevice();
     this.loadAssets();
@@ -66,6 +77,9 @@ class MultiplayerGameApp {
 
     this.pingValEl = document.getElementById('ping-val');
     this.hudPingDisplay = document.getElementById('hud-ping-display');
+
+    this.btnZoomToggle = document.getElementById('btn-zoom-toggle');
+    this.zoomValTextEl = document.getElementById('zoom-val-text');
 
     this.equipPromptBox = document.getElementById('equip-prompt-box');
     this.equipPromptText = document.getElementById('equip-prompt-text');
@@ -321,6 +335,24 @@ class MultiplayerGameApp {
     bindTouchAction(this.btnEquipPrompt, () => this.equipNearbyGun());
     bindTouchAction(this.btnToggleThrowable, () => this.cycleThrowable());
     bindTouchAction(this.btnThrowActive, () => this.throwActiveItem());
+    bindTouchAction(this.btnZoomToggle, () => this.cycleZoomLevel());
+  }
+
+  cycleZoomLevel() {
+    this.zoomIndex = (this.zoomIndex + 1) % this.zoomPresets.length;
+    this.applyZoom();
+  }
+
+  setZoomLevel(idx) {
+    this.zoomIndex = Math.max(0, Math.min(this.zoomPresets.length - 1, idx));
+    this.applyZoom();
+  }
+
+  applyZoom() {
+    const preset = this.zoomPresets[this.zoomIndex];
+    this.targetZoom = preset.scale;
+    if (this.zoomValTextEl) this.zoomValTextEl.textContent = preset.label;
+    this.addPickupNotification(`🔍 ZOOM: ${preset.label}`, '#00E5FF');
   }
 
   updateLobbyUI(lobby) {
@@ -530,6 +562,11 @@ class MultiplayerGameApp {
 
       // Key F: Throw Active Throwable
       if (key === 'f') this.throwActiveItem();
+
+      // Left Shift / Shift Key: Toggle Zoom Level (1x -> 2x -> 3x -> 4x)
+      if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        this.cycleZoomLevel();
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -723,6 +760,15 @@ class MultiplayerGameApp {
       this.hudWeaponName.textContent = names[this.currentWeapon] || 'DUAL UZI';
 
       this.addPickupNotification(`+EQUIPPED ${this.nearbyGun.name}`, '#00E5FF');
+
+      // Auto Adjust Zoom View for Weapon (Sniper: 4x wide, RPG: 3x wide, SMG/Shotgun: 1x)
+      if (this.currentWeapon === 'sniper') {
+        this.setZoomLevel(3); // 4x Scope View
+      } else if (this.currentWeapon === 'rpg') {
+        this.setZoomLevel(2); // 3x Wide Blast View
+      } else {
+        this.setZoomLevel(0); // 1x Standard Close View
+      }
 
       // Swap ground weapon
       this.nearbyGun.type = oldWeapon;
@@ -983,14 +1029,19 @@ class MultiplayerGameApp {
   }
 
   updateCamera() {
-    const targetX = this.localPlayer.x - this.canvas.width / 2;
-    const targetY = this.localPlayer.y - this.canvas.height / 2;
+    this.currentZoom += (this.targetZoom - this.currentZoom) * 0.08;
+
+    const targetX = this.localPlayer.x;
+    const targetY = this.localPlayer.y;
 
     this.camera.x += (targetX - this.camera.x) * 0.08;
     this.camera.y += (targetY - this.camera.y) * 0.08;
 
-    this.camera.x = Math.max(0, Math.min(this.worldWidth - this.canvas.width, this.camera.x));
-    this.camera.y = Math.max(0, Math.min(this.worldHeight - this.canvas.height, this.camera.y));
+    const halfVisW = (this.canvas.width / 2) / this.currentZoom;
+    const halfVisH = (this.canvas.height / 2) / this.currentZoom;
+
+    this.camera.x = Math.max(halfVisW, Math.min(this.worldWidth - halfVisW, this.camera.x));
+    this.camera.y = Math.max(halfVisH, Math.min(this.worldHeight - halfVisH, this.camera.y));
   }
 
   updatePhysics() {
@@ -1061,8 +1112,8 @@ class MultiplayerGameApp {
     if (this.touchJoyRight.isAiming) {
       p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
     } else {
-      const worldMouseX = this.mouse.x + this.camera.x;
-      const worldMouseY = this.mouse.y + this.camera.y;
+      const worldMouseX = this.camera.x + (this.mouse.x - this.canvas.width / 2) / this.currentZoom;
+      const worldMouseY = this.camera.y + (this.mouse.y - this.canvas.height / 2) / this.currentZoom;
       p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
@@ -1451,7 +1502,7 @@ class MultiplayerGameApp {
 
       const maxCamX = Math.max(1, this.worldWidth - W);
       const bgTravelX = Math.max(0, scaledW - W);
-      const bgX = -(camX / maxCamX) * (bgTravelX * 0.25);
+      const bgX = -(Math.max(0, camX - W / 2) / maxCamX) * (bgTravelX * 0.25);
       const bgY = (H - scaledH) / 2;
 
       ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
@@ -1467,8 +1518,10 @@ class MultiplayerGameApp {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // ──────────────── WORLD SPACE ────────────────
+    // ──────────────── WORLD SPACE (DYNAMIC 1x-4x ZOOM) ────────────────
     ctx.save();
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(this.currentZoom, this.currentZoom);
     ctx.translate(-camX, -camY);
 
     // 2. Natural Terrain
