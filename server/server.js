@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — High-Performance Low-Latency Game Server with Rate-Limiting & Anti-Lag
+// 🎮 Mini Militia 2D — High-Performance Low-Latency Game Server with Rate-Limiting & Authoritative Security
 
 const express = require('express');
 const http = require('http');
@@ -23,7 +23,13 @@ app.get('/health', (req, res) => {
 });
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, perMessageDeflate: false });
+
+// Limit maxPayload to 64KB to prevent memory exhaustion / DoS attacks
+const wss = new WebSocket.Server({ 
+  server, 
+  perMessageDeflate: false,
+  maxPayload: 64 * 1024 
+});
 
 const PORT = process.env.PORT || 3000;
 
@@ -55,7 +61,11 @@ wss.on('connection', (ws) => {
     team: 'RED',
     ready: false,
     alive: true,
-    lastSyncTime: 0,
+    hp: 100,
+    weapon: 'uzi',
+    // Inbound Packet Rate Limiting (Token Bucket: Max 45 msgs/sec)
+    msgCount: 0,
+    lastSecReset: Date.now(),
     ws
   };
   clients.set(ws, clientData);
@@ -64,6 +74,17 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (messageRaw) => {
     try {
+      const now = Date.now();
+      if (now - clientData.lastSecReset > 1000) {
+        clientData.msgCount = 0;
+        clientData.lastSecReset = now;
+      }
+      clientData.msgCount++;
+      // Drop packets if client exceeds 45 messages per second (Anti-DoS / Anti-Lag)
+      if (clientData.msgCount > 45) {
+        return;
+      }
+
       const message = JSON.parse(messageRaw);
       handleClientMessage(ws, clientData, message);
     } catch (err) {
@@ -88,7 +109,8 @@ function handleClientMessage(ws, client, msg) {
 
     case 'SET_NICKNAME': {
       if (payload && payload.nickname) {
-        client.nickname = String(payload.nickname).trim().slice(0, 16) || client.nickname;
+        // Sanitize string to prevent injection
+        client.nickname = String(payload.nickname).trim().slice(0, 14) || client.nickname;
         if (client.roomCode) broadcastLobbyState(client.roomCode);
       }
       break;
@@ -113,6 +135,7 @@ function handleClientMessage(ws, client, msg) {
         state: 'WAITING',
         players: new Map(),
         scores: { RED: 0, BLUE: 0 },
+        activeTimers: new Set(),
         createdAt: Date.now()
       };
 
@@ -120,6 +143,7 @@ function handleClientMessage(ws, client, msg) {
       client.team = 'RED';
       client.ready = true;
       client.alive = true;
+      client.hp = 100;
 
       lobby.players.set(client.id, client);
       lobbies.set(roomCode, lobby);
@@ -165,6 +189,7 @@ function handleClientMessage(ws, client, msg) {
       client.roomCode = targetCode;
       client.ready = false;
       client.alive = true;
+      client.hp = 100;
       lobby.players.set(client.id, client);
 
       send(ws, 'LOBBY_JOIN_SUCCESS', {
@@ -215,8 +240,11 @@ function handleClientMessage(ws, client, msg) {
       lobby.state = 'IN_GAME';
       lobby.scores = { RED: 0, BLUE: 0 };
 
-      // Reset all players to alive
-      lobby.players.forEach(p => { p.alive = true; });
+      // Reset all players to full health & alive
+      lobby.players.forEach(p => { 
+        p.alive = true;
+        p.hp = 100;
+      });
 
       console.log(`[MATCH] Starting match in ${lobby.code}`);
 
@@ -235,7 +263,8 @@ function handleClientMessage(ws, client, msg) {
     // ──────────────── HIGH-PERFORMANCE REAL-TIME RELAYS ────────────────
     case 'PLAYER_SYNC': {
       if (!client.roomCode) return;
-      // Broadcast compact sync payload
+      if (payload.wep) client.weapon = payload.wep;
+      
       broadcastToRoom(client.roomCode, 'PLAYER_SYNC', {
         id: client.id,
         ...payload
@@ -293,51 +322,85 @@ function handleClientMessage(ws, client, msg) {
 
     case 'PICKUP_COLLECT': {
       if (!client.roomCode) return;
+      const lobby = lobbies.get(client.roomCode);
+      if (!lobby) return;
+
       broadcastToRoom(client.roomCode, 'PICKUP_COLLECT', {
         pickerId: client.id,
         pickupId: payload.pickupId,
         pickupType: payload.pickupType
       });
 
-      // Respawn crate in 15 seconds
-      setTimeout(() => {
-        broadcastToRoom(client.roomCode, 'PICKUP_RESPAWN', {
-          pickupId: payload.pickupId
-        });
+      // Respawn crate in 15 seconds with tracked timer cleanup
+      const timer = setTimeout(() => {
+        if (lobbies.has(client.roomCode)) {
+          broadcastToRoom(client.roomCode, 'PICKUP_RESPAWN', {
+            pickupId: payload.pickupId
+          });
+        }
+        if (lobby && lobby.activeTimers) lobby.activeTimers.delete(timer);
       }, 15000);
+
+      lobby.activeTimers.add(timer);
       break;
     }
 
+    // SERVER-AUTHORITATIVE HIT VALIDATION & DAMAGE PROCESSING
     case 'PLAYER_HIT': {
       if (!client.roomCode) return;
-      // Forward hit packet directly to the victim only
       const lobby = lobbies.get(client.roomCode);
-      if (lobby && payload.victimId) {
-        const victim = lobby.players.get(payload.victimId);
-        if (victim && victim.ws && victim.ws.readyState === WebSocket.OPEN) {
-          send(victim.ws, 'PLAYER_HIT', payload);
+      if (!lobby || !payload.victimId) return;
+
+      const victim = lobby.players.get(payload.victimId);
+      if (!victim || !victim.alive) return;
+
+      // Validate & Clamp Damage (Prevents damage spoofing hacks)
+      const dmg = Math.max(1, Math.min(100, Number(payload.damage) || 15));
+      victim.hp = Math.max(0, victim.hp - dmg);
+
+      // Forward hit packet to victim so local HP UI updates
+      if (victim.ws && victim.ws.readyState === WebSocket.OPEN) {
+        send(victim.ws, 'PLAYER_HIT', {
+          victimId: victim.id,
+          killerId: client.id,
+          damage: dmg,
+          weapon: payload.weapon || 'COMBAT'
+        });
+      }
+
+      // If server health reaches 0, trigger authoritative elimination
+      if (victim.hp <= 0 && victim.alive) {
+        victim.alive = false;
+
+        // Update Team Score
+        if (client.team !== 'FFA' && lobby.scores[client.team] !== undefined) {
+          lobby.scores[client.team]++;
         }
+
+        console.log(`[KILL] ${client.id} eliminated ${victim.id} in ${lobby.code}`);
+
+        broadcastToRoom(lobby.code, 'PLAYER_KILLED', {
+          victimId: victim.id,
+          killerId: client.id,
+          weapon: payload.weapon || 'COMBAT',
+          scores: lobby.scores
+        });
       }
       break;
     }
 
-    // SERVER-AUTHORITATIVE KILL DEDUPLICATION
+    // Authoritative Kill Event fallback
     case 'PLAYER_KILLED': {
       if (!client.roomCode) return;
       const lobby = lobbies.get(client.roomCode);
       if (!lobby) return;
 
       const victim = lobby.players.get(payload.victimId);
-      // If victim was already dead, ignore duplicate kill packet!
-      if (victim && !victim.alive) {
-        return;
-      }
+      if (!victim || !victim.alive) return;
 
-      if (victim) {
-        victim.alive = false;
-      }
+      victim.alive = false;
+      victim.hp = 0;
 
-      // Update Team Score
       const killer = lobby.players.get(payload.killerId);
       if (killer && killer.team !== 'FFA' && lobby.scores[killer.team] !== undefined) {
         lobby.scores[killer.team]++;
@@ -345,7 +408,6 @@ function handleClientMessage(ws, client, msg) {
 
       console.log(`[KILL] ${payload.killerId} eliminated ${payload.victimId} in ${lobby.code}`);
 
-      // Broadcast single authoritative kill event with updated scoreboard
       broadcastToRoom(lobby.code, 'PLAYER_KILLED', {
         victimId: payload.victimId,
         killerId: payload.killerId,
@@ -360,6 +422,7 @@ function handleClientMessage(ws, client, msg) {
       const lobby = lobbies.get(client.roomCode);
       if (lobby) {
         client.alive = true;
+        client.hp = 100;
         broadcastToRoom(client.roomCode, 'PLAYER_RESPAWNED', {
           id: client.id,
           x: payload.x,
@@ -377,6 +440,11 @@ function leaveCurrentRoom(ws, client) {
   if (lobby) {
     lobby.players.delete(client.id);
     if (lobby.players.size === 0) {
+      // Clear active timers
+      if (lobby.activeTimers) {
+        lobby.activeTimers.forEach(t => clearTimeout(t));
+        lobby.activeTimers.clear();
+      }
       lobbies.delete(client.roomCode);
       console.log(`[LOBBY] Room ${client.roomCode} closed`);
     } else {
@@ -447,6 +515,6 @@ server.listen(PORT, () => {
   console.log(`=========================================`);
   console.log(`🚀 MINI MILITIA 2D HIGH-SPEED SERVER`);
   console.log(`🌐 Server running on http://localhost:${PORT}`);
-  console.log(`⚡ Low-Latency Anti-Lag Netcode Engine Active`);
+  console.log(`🛡️ Rate-Limiting & Authoritative Security Active`);
   console.log(`=========================================`);
 });

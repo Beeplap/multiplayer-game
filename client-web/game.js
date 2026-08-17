@@ -395,13 +395,23 @@ class MultiplayerGameApp {
       const isMe = player.id === this.myPlayerId;
       const card = document.createElement('div');
       card.className = `roster-card ${isMe ? 'is-me' : ''}`;
-      card.innerHTML = `
-        <span>${player.nickname} ${isMe ? '(YOU)' : ''}</span>
-        <div>
-          ${player.isHost ? '<span class="host-badge">HOST</span>' : ''}
-          <span>${player.ready ? '✅' : '⏳'}</span>
-        </div>
-      `;
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = `${player.nickname} ${isMe ? '(YOU)' : ''}`;
+
+      const statusDiv = document.createElement('div');
+      if (player.isHost) {
+        const hostBadge = document.createElement('span');
+        hostBadge.className = 'host-badge';
+        hostBadge.textContent = 'HOST';
+        statusDiv.appendChild(hostBadge);
+      }
+      const readySpan = document.createElement('span');
+      readySpan.textContent = player.ready ? ' ✅' : ' ⏳';
+      statusDiv.appendChild(readySpan);
+
+      card.appendChild(nameSpan);
+      card.appendChild(statusDiv);
 
       if (player.team === 'RED') {
         this.redPlayerListEl.appendChild(card);
@@ -1359,14 +1369,17 @@ class MultiplayerGameApp {
       }
     }
 
-    // ──────────────── YELLOW TOXIC GAS (CONTINUOUS HP DRAIN) ────────────────
+    // ──────────────── YELLOW TOXIC GAS (UNIFIED CONTINUOUS HP DRAIN) ────────────────
     this.toxicDamageTick++;
+    let isInToxicGas = false;
+    let toxicAttacker = 'TOXIC';
+
     for (let i = this.toxicClouds.length - 1; i >= 0; i--) {
       const s = this.toxicClouds[i];
       s.life--;
 
-      // Spawn ambient toxic particles
-      if (Math.random() < 0.4) {
+      // Spawn ambient toxic particles (Capped to prevent mobile GPU lag)
+      if (Math.random() < 0.35 && this.particles.length < 100) {
         this.particles.push({
           x: s.x + (Math.random() - 0.5) * s.radius * 1.5,
           y: s.y + (Math.random() - 0.5) * s.radius * 1.2,
@@ -1378,23 +1391,33 @@ class MultiplayerGameApp {
         });
       }
 
-      // HP Drain on Local Player inside toxic cloud
+      // Check if player is inside this toxic cloud
       if (p.hp > 0 && !p.isDead && Math.hypot(p.x - s.x, p.y - s.y) < s.radius + 15) {
-        if (this.toxicDamageTick % 18 === 0) {
-          const toxicDmg = 3;
-          p.hp = Math.max(0, p.hp - toxicDmg);
-          this.addPickupNotification('-3 HP (☣️ TOXIC GAS)', '#FFE500');
-
-          if (p.hp <= 0) {
-            this.triggerLocalDeath(s.ownerId || 'TOXIC', 'TOXIC_GAS');
-          }
-        }
+        isInToxicGas = true;
+        if (s.ownerId) toxicAttacker = s.ownerId;
       }
 
       if (s.life <= 0) this.toxicClouds.splice(i, 1);
     }
 
-    // Particles
+    // Apply unified toxic damage tick (prevents duplicate multi-tick from stacked clouds)
+    if (isInToxicGas && p.hp > 0 && !p.isDead) {
+      if (this.toxicDamageTick % 18 === 0) {
+        const toxicDmg = 3;
+        p.hp = Math.max(0, p.hp - toxicDmg);
+        this.addPickupNotification('-3 HP (☣️ TOXIC GAS)', '#FFE500');
+
+        if (p.hp <= 0) {
+          this.triggerLocalDeath(toxicAttacker, 'TOXIC_GAS');
+        }
+      }
+    }
+
+    // Particles with Hard Limit (Max 120 elements to prevent mobile memory/lag spikes)
+    while (this.particles.length > 120) {
+      this.particles.shift();
+    }
+
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const pt = this.particles[i];
       pt.x += pt.vx;
