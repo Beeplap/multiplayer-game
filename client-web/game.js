@@ -290,7 +290,7 @@ class MultiplayerGameApp {
           if (this.pingValEl) this.pingValEl.textContent = `${this.currentPing} ms`;
           const dot = this.hudPingDisplay?.querySelector('.ping-dot');
           if (dot) {
-            dot.className = 'ping-dot' + (this.currentPing > 120 ? ' high' : this.currentPing > 60 ? ' medium' : '');
+            dot.className = 'ping-dot' + (this.currentPing > 220 ? ' high' : this.currentPing > 120 ? ' medium' : '');
           }
         }
         break;
@@ -2814,11 +2814,15 @@ class MultiplayerGameApp {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // C. Embedded Faceted Rock Chunks in Underground Earth (Matching Screenshot 2)
-    for (let sx = 40; sx < this.worldWidth; sx += 90) {
+    // C. Embedded Faceted Rock Chunks in Underground Earth (Natural sparse distribution)
+    for (let sx = 120; sx < this.worldWidth; sx += 340) {
       const topY = this.getGroundYAt(sx);
-      this.drawFacetedRock(ctx, sx + 20, topY + 42, 12, (sx * 0.05), sx);
-      this.drawFacetedRock(ctx, sx + 65, topY + 80, 16, (sx * 0.08) + 1, sx + 1);
+      const depthOffset1 = 45 + ((sx * 13) % 40);
+      const depthOffset2 = 95 + ((sx * 17) % 50);
+      this.drawFacetedRock(ctx, sx + 20, topY + depthOffset1, 14, (sx * 0.05), sx);
+      if (sx % 680 === 0) {
+        this.drawFacetedRock(ctx, sx + 140, topY + depthOffset2, 18, (sx * 0.08) + 1, sx + 1);
+      }
     }
 
     // D. Continuous Stylized Cartoon Grass Following the Rolling Slopes
