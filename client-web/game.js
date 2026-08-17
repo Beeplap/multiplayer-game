@@ -355,6 +355,13 @@ class MultiplayerGameApp {
     });
 
     this.btnStartMatch.addEventListener('click', () => {
+      try {
+        const el = document.documentElement;
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+          else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen().catch(() => {});
+        }
+      } catch (e) {}
       this.send('START_GAME');
     });
 
