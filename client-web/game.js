@@ -1366,28 +1366,33 @@ class MultiplayerGameApp {
     };
 
     const loop = () => {
-      if (this.screens.game.classList.contains('active')) {
-        this.updatePhysics();
-        this.updateCamera();
+      try {
+        if (this.screens.game.classList.contains('active')) {
+          this.updatePhysics();
+          this.updateCamera();
 
-        const now = performance.now();
-        const shouldShoot = this.mouse.isDown || this.touchJoyRight.isAiming;
-        const cooldown = fireDelays[this.currentWeapon] || 110;
+          const now = performance.now();
+          const shouldShoot = this.mouse.isDown || this.touchJoyRight.isAiming;
+          const cooldown = fireDelays[this.currentWeapon] || 110;
 
-        if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
-          lastShootTime = now;
-          this.recoilOffset = 8.0;
-          this.fireWeapon();
+          if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
+            lastShootTime = now;
+            this.recoilOffset = 8.0;
+            this.fireWeapon();
+          }
+
+          if (this.recoilOffset > 0) {
+            this.recoilOffset *= 0.82;
+          }
+
+          this.renderCanvas();
+          this.updateHUD();
         }
-
-        if (this.recoilOffset > 0) {
-          this.recoilOffset *= 0.82;
-        }
-
-        this.renderCanvas();
-        this.updateHUD();
+      } catch (err) {
+        console.error('Frame render tick error:', err);
+      } finally {
+        requestAnimationFrame(loop);
       }
-      requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
   }
@@ -1578,10 +1583,9 @@ class MultiplayerGameApp {
           rp.vx = (s0.vx || 0) + ((s1.vx || 0) - (s0.vx || 0)) * alpha;
           rp.vy = (s0.vy || 0) + ((s1.vy || 0) - (s0.vy || 0)) * alpha;
 
-          // Shortest angular difference interpolation to prevent rotation flipping
+          // Shortest angular difference interpolation to prevent rotation flipping (Zero while loops)
           let dAngle = (s1.aim || 0) - (s0.aim || 0);
-          while (dAngle > Math.PI) dAngle -= Math.PI * 2;
-          while (dAngle < -Math.PI) dAngle += Math.PI * 2;
+          dAngle = Math.atan2(Math.sin(dAngle), Math.cos(dAngle));
           rp.aimAngle = (s0.aim || 0) + dAngle * alpha;
         } else {
           // Smooth forward dead-reckoning fallback
@@ -1838,8 +1842,8 @@ class MultiplayerGameApp {
     }
 
     // Particles with Hard Limit (Max 120 elements to prevent mobile memory/lag spikes)
-    while (this.particles.length > 120) {
-      this.particles.shift();
+    if (this.particles.length > 120) {
+      this.particles.splice(0, this.particles.length - 120);
     }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {

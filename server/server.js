@@ -163,8 +163,10 @@ function handleClientMessage(ws, client, msg) {
       leaveCurrentRoom(ws, client);
 
       let roomCode = generate5DigitCode();
-      while (lobbies.has(roomCode)) {
+      let attempts = 0;
+      while (lobbies.has(roomCode) && attempts < 100) {
         roomCode = generate5DigitCode();
+        attempts++;
       }
 
       const matchMode = payload?.mode || 'DUEL';
