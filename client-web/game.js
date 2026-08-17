@@ -122,11 +122,30 @@ class MultiplayerGameApp {
     return `${protocol}//${window.location.host}`;
   }
 
+  showToast(title, subtitle, icon = '📋') {
+    const toast = document.getElementById('toast-popup');
+    const titleEl = document.getElementById('toast-title');
+    const subEl = document.getElementById('toast-subtitle');
+    const iconEl = toast?.querySelector('.toast-icon');
+
+    if (toast && titleEl && subEl) {
+      titleEl.textContent = title;
+      subEl.textContent = subtitle;
+      if (iconEl) iconEl.textContent = icon;
+
+      toast.classList.remove('hidden');
+      if (this.toastTimeout) clearTimeout(this.toastTimeout);
+      this.toastTimeout = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 2800);
+    }
+  }
+
   initWebSocket() {
     const wsUrl = this.getAutoServerUrl();
 
     if (this.serverAddressTextEl) {
-      this.serverAddressTextEl.textContent = wsUrl;
+      this.serverAddressTextEl.textContent = 'CONNECTING...';
     }
 
     try {
@@ -135,7 +154,10 @@ class MultiplayerGameApp {
       this.ws.onopen = () => {
         console.log('⚡ Connected to Game Server:', wsUrl);
         if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot online';
-        if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = wsUrl;
+        if (this.serverAddressTextEl) {
+          const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+          this.serverAddressTextEl.textContent = isLocal ? 'ONLINE • LOCALHOST ARENA' : 'ONLINE • READY FOR BATTLE';
+        }
 
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
 
@@ -164,14 +186,14 @@ class MultiplayerGameApp {
 
       this.ws.onclose = () => {
         if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot';
-        if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'Reconnecting...';
+        if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'RECONNECTING...';
         if (this.pingInterval) clearInterval(this.pingInterval);
         setTimeout(() => this.initWebSocket(), 2000);
       };
     } catch (e) {
       console.error('WebSocket init error', e);
       if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot';
-      if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'Offline (Check Server)';
+      if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'OFFLINE (CHECK SERVER)';
     }
   }
 
@@ -295,8 +317,12 @@ class MultiplayerGameApp {
 
     document.getElementById('btn-copy-code').addEventListener('click', () => {
       if (this.currentRoom) {
-        navigator.clipboard.writeText(this.currentRoom.code);
-        alert(`Room Code ${this.currentRoom.code} copied! Share with friends! 🚀`);
+        navigator.clipboard.writeText(this.currentRoom.code).catch(() => {});
+        this.showToast(
+          `ROOM CODE COPIED: ${this.currentRoom.code}`,
+          'Send this 5-digit code to your friends to join the match! 🚀',
+          '📋'
+        );
       }
     });
 

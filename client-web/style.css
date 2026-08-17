@@ -378,6 +378,64 @@ input[type="text"]:focus {
   max-width: 250px;
 }
 
+/* ──────────────── CUSTOM TOAST POPUP NOTIFICATION ──────────────── */
+.toast-popup {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  background: rgba(13, 20, 36, 0.95);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  backdrop-filter: blur(16px);
+  padding: 12px 24px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 25px rgba(0, 229, 255, 0.25);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
+}
+
+.toast-popup.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-24px);
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 8px #00e676);
+}
+
+.toast-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 2px;
+}
+
+.toast-text strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.8px;
+}
+
+.toast-text small {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
 /* SCREEN 2: LOBBY CARD */
 .lobby-card {
   width: 100%;
