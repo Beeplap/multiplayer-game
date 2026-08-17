@@ -813,8 +813,9 @@ class MultiplayerGameApp {
     const targetX = this.localPlayer.x - this.canvas.width / 2;
     const targetY = this.localPlayer.y - this.canvas.height / 2;
 
-    this.camera.x += (targetX - this.camera.x) * 0.12;
-    this.camera.y += (targetY - this.camera.y) * 0.12;
+    // Smooth, cinematic camera tracking (no jerky sudden movements)
+    this.camera.x += (targetX - this.camera.x) * 0.08;
+    this.camera.y += (targetY - this.camera.y) * 0.08;
 
     this.camera.x = Math.max(0, Math.min(this.worldWidth - this.canvas.width, this.camera.x));
     this.camera.y = Math.max(0, Math.min(this.worldHeight - this.canvas.height, this.camera.y));
@@ -1197,35 +1198,28 @@ class MultiplayerGameApp {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. SEAMLESS ASPECT-FILL PARALLAX BACKGROUND (ZERO STITCHING / ZERO SEAMS)
+    // 1. STABLE & CALM DISTANT MOUNTAIN BACKDROP (ZERO MOTION SICKNESS / ZERO SEAMS)
     if (this.assets.loaded && this.assets.bg.complete) {
       const bg = this.assets.bg;
-      const parallaxFactor = 0.35;
-      
-      // Calculate continuous scale factor
-      const maxCamX = Math.max(1, this.worldWidth - W);
-      const maxCamY = Math.max(1, this.worldHeight - H);
 
-      // Scaled dimensions guaranteeing 100% viewport coverage with parallax span
-      const targetBgWidth = W + (this.worldWidth - W) * parallaxFactor;
-      const scale = Math.max(H / bg.height, targetBgWidth / bg.width);
+      // Fill viewport with extra margin for ultra-subtle panning
+      const scale = Math.max(W / bg.width, H / bg.height) * 1.08;
       const scaledW = bg.width * scale;
       const scaledH = bg.height * scale;
 
-      const bgTravelX = scaledW - W;
-      const bgTravelY = scaledH - H;
+      // Ultra-subtle 2% horizontal parallax, rock-solid vertical lock (no dizzying jumps!)
+      const maxCamX = Math.max(1, this.worldWidth - W);
+      const bgTravelX = Math.max(0, scaledW - W);
+      const bgX = -(camX / maxCamX) * (bgTravelX * 0.25);
+      const bgY = (H - scaledH) / 2; // Locked vertically for complete visual stability
 
-      const bgX = -(camX / maxCamX) * bgTravelX;
-      const bgY = -(camY / maxCamY) * bgTravelY;
-
-      // Draw single, continuous, seamless alpine background
       ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
 
-      // Volumetric atmospheric horizon mist overlay
-      const mistGrad = ctx.createLinearGradient(0, H * 0.45, 0, H);
+      // Gentle atmospheric depth haze
+      const mistGrad = ctx.createLinearGradient(0, H * 0.55, 0, H);
       mistGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-      mistGrad.addColorStop(0.6, 'rgba(180, 205, 215, 0.15)');
-      mistGrad.addColorStop(1, 'rgba(30, 45, 35, 0.4)');
+      mistGrad.addColorStop(0.7, 'rgba(180, 205, 215, 0.12)');
+      mistGrad.addColorStop(1, 'rgba(30, 45, 35, 0.35)');
       ctx.fillStyle = mistGrad;
       ctx.fillRect(0, 0, W, H);
     } else {
