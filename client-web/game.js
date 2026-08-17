@@ -88,6 +88,9 @@ class MultiplayerGameApp {
     this.btnThrowActive = document.getElementById('btn-throw-active');
     this.tacActiveIconEl = document.getElementById('tac-active-icon');
     this.tacActiveCountEl = document.getElementById('tac-active-count');
+
+    this.serverAddressTextEl = document.getElementById('connected-server-address');
+    this.serverStatusDotEl = document.getElementById('server-status-dot');
   }
 
   loadAssets() {
@@ -122,11 +125,18 @@ class MultiplayerGameApp {
   initWebSocket() {
     const wsUrl = this.getAutoServerUrl();
 
+    if (this.serverAddressTextEl) {
+      this.serverAddressTextEl.textContent = wsUrl;
+    }
+
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         console.log('⚡ Connected to Game Server:', wsUrl);
+        if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot online';
+        if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = wsUrl;
+
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
 
         // High-Precision Sub-Millisecond Heartbeat Ping (Every 1.2 seconds)
@@ -153,11 +163,15 @@ class MultiplayerGameApp {
       };
 
       this.ws.onclose = () => {
+        if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot';
+        if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'Reconnecting...';
         if (this.pingInterval) clearInterval(this.pingInterval);
         setTimeout(() => this.initWebSocket(), 2000);
       };
     } catch (e) {
       console.error('WebSocket init error', e);
+      if (this.serverStatusDotEl) this.serverStatusDotEl.className = 'status-indicator-dot';
+      if (this.serverAddressTextEl) this.serverAddressTextEl.textContent = 'Offline (Check Server)';
     }
   }
 

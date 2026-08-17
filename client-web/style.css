@@ -321,6 +321,63 @@ input[type="text"]:focus {
   color: var(--text-muted);
 }
 
+/* Connected Server Live Indicator */
+.server-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: 20px;
+  padding: 6px 14px;
+  margin: 0 auto;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.status-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3366;
+  box-shadow: 0 0 8px #ff3366;
+  flex-shrink: 0;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.status-indicator-dot.online {
+  background: #00e676;
+  box-shadow: 0 0 10px #00e676;
+  animation: pulse-dot 2s infinite ease-in-out;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.75; }
+}
+
+.server-status-label {
+  color: var(--accent-cyan);
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+.server-address-text {
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
 /* SCREEN 2: LOBBY CARD */
 .lobby-card {
   width: 100%;
