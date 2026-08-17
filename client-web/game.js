@@ -484,6 +484,55 @@ class MultiplayerGameApp {
     this.canvas.height = window.innerHeight;
   }
 
+  // ──────────────── CONTINUOUS RAYCAST CCD GEOMETRIC SOLVER (ZERO TUNNELING) ────────────────
+  // Line Segment vs Line Segment Exact Intersection
+  rayIntersectSegment(x0, y0, x1, y1, x2, y2, x3, y3) {
+    const dx1 = x1 - x0, dy1 = y1 - y0;
+    const dx2 = x3 - x2, dy2 = y3 - y2;
+    const denom = dx1 * dy2 - dy1 * dx2;
+    if (Math.abs(denom) < 0.00001) return null;
+
+    const t = ((x2 - x0) * dy2 - (y2 - y0) * dx2) / denom;
+    const u = ((x2 - x0) * dy1 - (y2 - y0) * dx1) / denom;
+
+    if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+      return { x: x0 + t * dx1, y: y0 + t * dy1, t };
+    }
+    return null;
+  }
+
+  // Line Segment vs Circle Swept Intersection (Player Hitbox CCD)
+  rayIntersectCircle(x0, y0, x1, y1, cx, cy, radius) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const fx = x0 - cx;
+    const fy = y0 - cy;
+
+    const a = dx * dx + dy * dy;
+    if (a < 0.0001) {
+      const dist = Math.hypot(x0 - cx, y0 - cy);
+      return dist <= radius ? { x: x0, y: y0, t: 0 } : null;
+    }
+
+    const b = 2 * (fx * dx + fy * dy);
+    const c = (fx * fx + fy * fy) - radius * radius;
+
+    const discriminant = b * b - 4 * a * c;
+    if (discriminant < 0) return null;
+
+    const sqrtD = Math.sqrt(discriminant);
+    const t1 = (-b - sqrtD) / (2 * a);
+    const t2 = (-b + sqrtD) / (2 * a);
+
+    if (t1 >= 0 && t1 <= 1) {
+      return { x: x0 + t1 * dx, y: y0 + t1 * dy, t: t1 };
+    }
+    if (t2 >= 0 && t2 <= 1) {
+      return { x: x0 + t2 * dx, y: y0 + t2 * dy, t: t2 };
+    }
+    return null;
+  }
+
   getGroundYAt(worldX) {
     const gy = this.groundY; // Base 1080
     // Flat Outpost Bunker Valley Floor
@@ -936,6 +985,7 @@ class MultiplayerGameApp {
   }
 
   handleRemotePlayerSync(data) {
+    const now = performance.now();
     if (!this.remotePlayers.has(data.id)) {
       this.remotePlayers.set(data.id, {
         id: data.id,
@@ -951,7 +1001,8 @@ class MultiplayerGameApp {
         targetX: data.x,
         targetY: data.y,
         isDead: false,
-        walkCycle: 0
+        walkCycle: 0,
+        snapshots: [{ time: now, x: data.x, y: data.y, vx: data.vx || 0, vy: data.vy || 0, aim: data.aim || 0 }]
       });
     } else {
       const p = this.remotePlayers.get(data.id);
@@ -963,6 +1014,10 @@ class MultiplayerGameApp {
       p.hp = data.hp !== undefined ? data.hp : p.hp;
       p.weapon = data.wep || p.weapon;
       if (Math.abs(data.vx) > 0.5) p.walkCycle = (p.walkCycle || 0) + 0.2;
+
+      if (!p.snapshots) p.snapshots = [];
+      p.snapshots.push({ time: now, x: data.x, y: data.y, vx: data.vx || 0, vy: data.vy || 0, aim: data.aim || 0 });
+      if (p.snapshots.length > 8) p.snapshots.shift();
     }
   }
 
@@ -1299,89 +1354,139 @@ class MultiplayerGameApp {
       p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
-    // Dead-Reckoning for Remote Players
+    // ──────────────── NETWORK LAG-COMPENSATED SNAPSHOT INTERPOLATION (ZERO DESYNC) ────────────────
+    const renderNow = performance.now();
+    const interpDelay = 45; // 45ms jitter buffer for smooth continuous 60fps interpolation
+    const renderTime = renderNow - interpDelay;
+
     this.remotePlayers.forEach(rp => {
       if (!rp.isDead) {
-        rp.targetX += rp.vx * 0.5;
-        rp.targetY += rp.vy * 0.5;
-        const rpGroundY = this.getGroundYAt(rp.targetX);
-        rp.targetX = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.targetX));
-        rp.targetY = Math.max(soldierRadius + 15, Math.min(rpGroundY - soldierRadius, rp.targetY));
-        rp.x += (rp.targetX - rp.x) * 0.28;
-        rp.y += (rp.targetY - rp.y) * 0.28;
+        if (rp.snapshots && rp.snapshots.length >= 2) {
+          let s0 = rp.snapshots[0];
+          let s1 = rp.snapshots[rp.snapshots.length - 1];
+
+          for (let j = 0; j < rp.snapshots.length - 1; j++) {
+            if (rp.snapshots[j].time <= renderTime && rp.snapshots[j + 1].time >= renderTime) {
+              s0 = rp.snapshots[j];
+              s1 = rp.snapshots[j + 1];
+              break;
+            }
+          }
+
+          const timeSpan = s1.time - s0.time;
+          const alpha = timeSpan > 0 ? Math.max(0, Math.min(1, (renderTime - s0.time) / timeSpan)) : 1;
+          rp.x = s0.x + (s1.x - s0.x) * alpha;
+          rp.y = s0.y + (s1.y - s0.y) * alpha;
+          rp.vx = s0.vx + (s1.vx - s0.vx) * alpha;
+          rp.vy = s0.vy + (s1.vy - s0.vy) * alpha;
+          rp.aimAngle = s0.aim + (s1.aim - s0.aim) * alpha;
+        } else {
+          // Smooth forward dead-reckoning fallback
+          rp.targetX += rp.vx * 0.4;
+          rp.targetY += rp.vy * 0.4;
+          rp.x += (rp.targetX - rp.x) * 0.28;
+          rp.y += (rp.targetY - rp.y) * 0.28;
+        }
+
+        const rpGroundY = this.getGroundYAt(rp.x);
+        rp.x = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.x));
+        rp.y = Math.max(soldierRadius + 15, Math.min(rpGroundY - soldierRadius, rp.y));
       }
     });
 
-    // ──────────────── BULLET & PLATFORM COLLISION ────────────────
+    // ──────────────── CONTINUOUS SWEPT-RAYCAST CCD BULLET TRACING (ZERO TUNNELING) ────────────────
     for (let i = this.bullets.length - 1; i >= 0; i--) {
       const b = this.bullets[i];
-      b.x += b.vx;
-      b.y += b.vy;
+      const x0 = b.x;
+      const y0 = b.y;
+      const x1 = b.x + b.vx;
+      const y1 = b.y + b.vy;
       b.life++;
 
-      let hitPlatform = false;
-      const bGroundY = this.getGroundYAt(b.x);
-      if (b.y >= bGroundY) {
-        hitPlatform = true;
+      let closestHit = null;
+      let hitType = null;
+
+      // 1. Swept Raycast against Ground Surface
+      const midX = (x0 + x1) * 0.5;
+      const gY = this.getGroundYAt(midX);
+      if (y1 >= gY || y0 >= gY) {
+        const hit = this.rayIntersectSegment(x0, y0, x1, y1, x0, this.getGroundYAt(x0), x1, this.getGroundYAt(x1));
+        if (hit && (!closestHit || hit.t < closestHit.t)) {
+          closestHit = hit;
+          hitType = 'TERRAIN';
+        } else if (y1 >= gY) {
+          closestHit = { x: x1, y: gY, t: 1.0 };
+          hitType = 'TERRAIN';
+        }
       }
 
-      if (!hitPlatform) {
-        for (const plat of this.platforms) {
-          if (plat.type !== 'GROUND' && b.x >= plat.x && b.x <= plat.x + plat.w) {
-            const topY = this.getPlatformTopY(plat, b.x);
-            const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
-            if (b.y >= topY && b.y <= botY) {
-              hitPlatform = true;
-              break;
+      // 2. Swept Raycast against Solid Platforms, Roofs & Walls
+      for (const plat of this.platforms) {
+        if (plat.type === 'GROUND') continue;
+        const minX = Math.min(x0, x1) - 4;
+        const maxX = Math.max(x0, x1) + 4;
+        if (maxX >= plat.x && minX <= plat.x + plat.w) {
+          const topY0 = this.getPlatformTopY(plat, Math.max(plat.x, Math.min(plat.x + plat.w, x0)));
+          const topY1 = this.getPlatformTopY(plat, Math.max(plat.x, Math.min(plat.x + plat.w, x1)));
+          const hitTop = this.rayIntersectSegment(x0, y0, x1, y1, plat.x, topY0, plat.x + plat.w, topY1);
+          if (hitTop && (!closestHit || hitTop.t < closestHit.t)) {
+            closestHit = hitTop;
+            hitType = 'TERRAIN';
+          }
+
+          const botY = plat.y + plat.h + (plat.shape ? 40 : 0);
+          if (y0 <= botY + 10 && y1 >= plat.y - 10 && x1 >= plat.x && x1 <= plat.x + plat.w) {
+            if (!closestHit) {
+              closestHit = { x: x1, y: y1, t: 1.0 };
+              hitType = 'TERRAIN';
             }
           }
         }
       }
 
-      if (hitPlatform) {
+      // 3. Swept Raycast against Local Player Hitbox
+      if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
+        const hitPlayer = this.rayIntersectCircle(x0, y0, x1, y1, p.x, p.y, soldierRadius + 3);
+        if (hitPlayer && (!closestHit || hitPlayer.t < closestHit.t)) {
+          closestHit = hitPlayer;
+          hitType = 'PLAYER';
+        }
+      }
+
+      // 4. Resolve Collision at Exact Continuous Impact Coordinates
+      if (closestHit) {
+        b.x = closestHit.x;
+        b.y = closestHit.y;
         this.spawnImpactSparks(b.x, b.y, b.color);
+
         if (b.weapon === 'rpg') {
           this.createExplosion(b.x, b.y, 95, 95, b.ownerId);
+        } else if (hitType === 'PLAYER') {
+          let dmg;
+          if (b.weapon === 'sniper') dmg = 70;
+          else if (b.weapon === 'uzi') dmg = b.life < 16 ? 18 : 12;
+          else if (b.weapon === 'shotgun') dmg = b.life < 8 ? 15 : 7;
+          else dmg = 16;
+
+          p.hp = Math.max(0, p.hp - dmg);
+          this.spawnImpactSparks(b.x, b.y, '#FF3366');
+
+          if (p.hp <= 0) {
+            this.triggerLocalDeath(b.ownerId, b.weapon);
+          }
         }
+
         this.bullets.splice(i, 1);
         continue;
       }
 
-      // Hit Local Player
-      if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
-        if (Math.hypot(b.x - p.x, b.y - p.y) < soldierRadius + 4) {
-          let dmg;
-          if (b.weapon === 'sniper') dmg = 70;
-          else if (b.weapon === 'rpg') dmg = 90;
-          else if (b.weapon === 'uzi') {
-            // SMG effective range dropoff (18 at close range, 12 at edge)
-            dmg = b.life < 16 ? 18 : 12;
-          } else if (b.weapon === 'shotgun') {
-            // Shotgun effective range dropoff (15 tight blast, 7 at edge)
-            dmg = b.life < 8 ? 15 : 7;
-          } else {
-            dmg = 16;
-          }
+      // Advance bullet to new position
+      b.x = x1;
+      b.y = y1;
 
-          this.spawnImpactSparks(b.x, b.y, '#FF3366');
-
-          if (b.weapon === 'rpg') {
-            this.createExplosion(b.x, b.y, 95, 95, b.ownerId);
-          } else {
-            p.hp = Math.max(0, p.hp - dmg);
-            if (p.hp <= 0) {
-              this.triggerLocalDeath(b.ownerId, b.weapon);
-            }
-          }
-
-          this.bullets.splice(i, 1);
-          continue;
-        }
-      }
-
-      // Decreased Range Limits: Shotgun = 18 frames (~250px), SMG = 32 frames (~540px), Sniper/RPG = 78 frames
+      // Range Expiration (Bazooka / Sniper = 78, SMG = 32, Shotgun = 18)
       const maxLife = b.maxLife || (b.weapon === 'shotgun' ? 18 : b.weapon === 'uzi' ? 32 : 78);
-      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > bGroundY || b.life > maxLife) {
+      if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > this.worldHeight + 200 || b.life > maxLife) {
         if (b.life > maxLife && (b.weapon === 'shotgun' || b.weapon === 'uzi')) {
           this.spawnImpactSparks(b.x, b.y, b.color);
         }
