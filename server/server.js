@@ -517,7 +517,7 @@ function handleDisconnect(ws, client) {
 
 function send(ws, type, payload) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type, payload }));
+    ws.send(JSON.stringify({ type, payload }), { compress: false });
   }
 }
 
@@ -532,7 +532,7 @@ function broadcastToRoom(roomCode, type, payload, excludeWs = null) {
       if (type === 'PLAYER_SYNC' && p.ws.bufferedAmount > 32 * 1024) {
         return;
       }
-      p.ws.send(data);
+      p.ws.send(data, { compress: false });
     }
   });
 }
