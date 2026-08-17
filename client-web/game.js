@@ -56,7 +56,6 @@ class MultiplayerGameApp {
     };
 
     this.nicknameInput = document.getElementById('player-nickname');
-    this.serverUrlInput = document.getElementById('server-url');
     this.joinCodeInput = document.getElementById('join-code-input');
 
     this.displayRoomCodeEl = document.getElementById('display-room-code');
@@ -108,18 +107,26 @@ class MultiplayerGameApp {
     }
   }
 
-  // ──────────────── WEBSOCKET & NETWORKING ────────────────
-  initWebSocket() {
-    let wsUrl = this.serverUrlInput.value.trim();
-    if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      wsUrl = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+  // ──────────────── WEBSOCKET & AUTOMATIC NETWORKING ────────────────
+  getAutoServerUrl() {
+    // 1. If running as a local file or no host, default to local dev server
+    if (window.location.protocol === 'file:' || !window.location.host) {
+      return 'ws://localhost:3000';
     }
+    // 2. Automatic Secure / Insecure Protocol detection based on HTTPS
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // 3. Connect to the exact domain and port where the game is hosted (Render, Localhost, etc.)
+    return `${protocol}//${window.location.host}`;
+  }
+
+  initWebSocket() {
+    const wsUrl = this.getAutoServerUrl();
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
-        console.log(' Connected to Game Server:', wsUrl);
+        console.log('⚡ Connected to Game Server:', wsUrl);
         this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
 
         // Heartbeat Ping (Every 2 seconds)
