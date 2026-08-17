@@ -562,20 +562,20 @@ class MultiplayerGameApp {
     ];
 
     this.tacticalPickups = [
-      { id: 'pk_g1', type: 'GRENADE', x: 490, y: 590, label: '💣 FRAG GRENADES', available: true },
-      { id: 'pk_m1', type: 'MINE', x: 1160, y: 480, label: '⚡ PROXIMITY MINE', available: true },
-      { id: 'pk_s1', type: 'TOXIC_GAS', x: 2540, y: 570, label: '☣️ TOXIC MUSTARD GAS', available: true },
-      { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 690, label: '❤️ MEDICAL CASE', available: true }
+      { id: 'pk_g1', type: 'GRENADE', x: 490, y: this.getTopSurfaceY(490) - 24, label: '💣 FRAG GRENADES', available: true },
+      { id: 'pk_m1', type: 'MINE', x: 1160, y: this.getTopSurfaceY(1160) - 24, label: '⚡ PROXIMITY MINE', available: true },
+      { id: 'pk_s1', type: 'TOXIC_GAS', x: 2540, y: this.getTopSurfaceY(2540) - 24, label: '☣️ TOXIC MUSTARD GAS', available: true },
+      { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: this.getTopSurfaceY(2980) - 24, label: '❤️ MEDICAL CASE', available: true }
     ];
 
     this.groundGuns = [
       {
         id: 'central_legendary',
         type: 'rpg',
-        name: 'RPG ROCKET LAUNCHER',
+        name: 'BAZOOKA',
         rarity: 'LEGENDARY',
         x: 1800,
-        y: 1040,
+        y: 1045,
         available: true
       }
     ];
@@ -591,14 +591,20 @@ class MultiplayerGameApp {
       { x: 3200, height: 135, scale: 1.12, lean: -0.05, hasBoulders: true }
     ];
 
-    // Extra Surface Boulder Clusters on Natural Hills & Ridges
+    // Random Faceted Alpine Stone & Boulder Clusters Across the Ground & Rolling Hills
     this.surfaceBoulders = [
-      { x: 340, count: 3, scale: 1.1 },
-      { x: 920, count: 2, scale: 0.9 },
-      { x: 1240, count: 3, scale: 1.0 },
-      { x: 2320, count: 2, scale: 1.0 },
+      { x: 120, count: 2, scale: 0.95 },
+      { x: 340, count: 3, scale: 1.15 },
+      { x: 740, count: 2, scale: 0.9 },
+      { x: 920, count: 3, scale: 1.05 },
+      { x: 1260, count: 3, scale: 1.1 },
+      { x: 1480, count: 2, scale: 0.9 },
+      { x: 2140, count: 2, scale: 0.95 },
+      { x: 2340, count: 3, scale: 1.2 },
+      { x: 2720, count: 2, scale: 0.85 },
       { x: 2880, count: 3, scale: 1.2 },
-      { x: 3340, count: 2, scale: 0.95 }
+      { x: 3340, count: 3, scale: 1.0 },
+      { x: 3480, count: 2, scale: 0.9 }
     ];
   }
 
@@ -620,7 +626,7 @@ class MultiplayerGameApp {
 
     if (roll < 0.08) {
       gunType = 'rpg';
-      gunName = 'RPG ROCKET LAUNCHER';
+      gunName = 'BAZOOKA';
       rarity = 'LEGENDARY';
     } else if (roll < 0.28) {
       gunType = 'sniper';
@@ -633,24 +639,26 @@ class MultiplayerGameApp {
     }
 
     const spawnSpots = [
-      { x: 380, y: 840 },
-      { x: 520, y: 620 },
-      { x: 980, y: 740 },
-      { x: 1160, y: 500 },
-      { x: 2280, y: 800 },
-      { x: 2540, y: 600 },
-      { x: 2980, y: 720 },
-      { x: 3180, y: 480 }
+      { x: 380 },
+      { x: 520 },
+      { x: 980 },
+      { x: 1160 },
+      { x: 2280 },
+      { x: 2540 },
+      { x: 2980 },
+      { x: 3180 }
     ];
 
     const spot = spawnSpots[Math.floor(Math.random() * spawnSpots.length)];
+    // Dynamically calculate surface height so gun hovers cleanly 24px above terrain grass
+    const surfaceY = this.getTopSurfaceY(spot.x);
     const newGun = {
       id: `gun_${Date.now()}_${Math.random()}`,
       type: gunType,
       name: gunName,
       rarity,
       x: spot.x,
-      y: spot.y,
+      y: surfaceY - 24,
       available: true
     };
 
@@ -865,13 +873,13 @@ class MultiplayerGameApp {
         uzi: 'DUAL SMG UZI',
         shotgun: 'COMBAT SHOTGUN',
         sniper: 'MARKSMAN SNIPER',
-        rpg: 'ROCKET LAUNCHER'
+        rpg: 'BAZOOKA'
       };
       this.hudWeaponName.textContent = names[this.currentWeapon] || 'DUAL UZI';
 
       this.addPickupNotification(`+EQUIPPED ${this.nearbyGun.name}`, '#00E5FF');
 
-      // Auto Adjust Zoom View for Weapon (Sniper: 4x wide, RPG: 3x wide, SMG/Shotgun: 1x)
+      // Auto Adjust Zoom View for Weapon (Sniper: 4x wide, Bazooka: 3x wide, SMG/Shotgun: 1x)
       if (this.currentWeapon === 'sniper') {
         this.setZoomLevel(3); // 4x Scope View
       } else if (this.currentWeapon === 'rpg') {
@@ -1111,7 +1119,7 @@ class MultiplayerGameApp {
       uzi: 110,
       shotgun: 680, // Decreased firerate (deliberate heavy tactical pump action)
       sniper: 650,
-      rpg: 850
+      rpg: 1400 // Reduced Bazooka attack speed (heavy 1.4s explosive reload)
     };
 
     const loop = () => {
