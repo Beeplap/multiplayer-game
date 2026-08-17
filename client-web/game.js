@@ -383,7 +383,8 @@ class MultiplayerGameApp {
   }
 
   updateLobbyUI(lobby) {
-    this.lobbyModeTagEl.textContent = `${lobby.mode} ${lobby.mode === 'FFA' ? 'FREE FOR ALL' : 'TDM'}`;
+    const isDuel = (lobby.mode === 'DUEL' || lobby.mode === 'FFA' || lobby.mode === '1v1');
+    this.lobbyModeTagEl.textContent = isDuel ? '⚔️ DUEL (FFA / 1v1 / 1v1v1)' : '🛡️ 2v2 SQUAD TDM';
 
     this.hostSettingsBar.style.display = this.isHost ? 'flex' : 'none';
     this.btnStartMatch.style.display = this.isHost ? 'block' : 'none';
@@ -392,19 +393,41 @@ class MultiplayerGameApp {
       b.classList.toggle('active', b.dataset.mode === lobby.mode);
     });
 
+    const vsDivider = document.querySelector('.vs-divider');
+    const blueCol = document.querySelector('.team-column.blue-team');
+    const redColTitle = document.querySelector('.team-column.red-team .team-title');
+    const btnJoinRed = document.getElementById('btn-join-red');
+    const btnJoinBlue = document.getElementById('btn-join-blue');
+
+    if (isDuel) {
+      if (vsDivider) vsDivider.style.display = 'none';
+      if (blueCol) blueCol.style.display = 'none';
+      if (redColTitle) redColTitle.textContent = '⚔️ DUEL FIGHTERS';
+      if (btnJoinRed) btnJoinRed.style.display = 'none';
+      if (btnJoinBlue) btnJoinBlue.style.display = 'none';
+    } else {
+      if (vsDivider) vsDivider.style.display = 'flex';
+      if (blueCol) blueCol.style.display = 'flex';
+      if (redColTitle) redColTitle.textContent = '🔴 RED TEAM';
+      if (btnJoinRed) btnJoinRed.style.display = 'block';
+      if (btnJoinBlue) btnJoinBlue.style.display = 'block';
+    }
+
     this.redPlayerListEl.innerHTML = '';
     this.bluePlayerListEl.innerHTML = '';
 
+    const DUEL_BADGES = ['🔴', '🔵', '🟡', '🟢', '🟣', '🔷', '🟠', '🌸'];
     let redCount = 0;
     let blueCount = 0;
 
-    lobby.players.forEach(player => {
+    lobby.players.forEach((player, idx) => {
       const isMe = player.id === this.myPlayerId;
       const card = document.createElement('div');
       card.className = `roster-card ${isMe ? 'is-me' : ''}`;
 
       const nameSpan = document.createElement('span');
-      nameSpan.textContent = `${player.nickname} ${isMe ? '(YOU)' : ''}`;
+      const badge = isDuel ? `${DUEL_BADGES[idx % DUEL_BADGES.length]} ` : '';
+      nameSpan.textContent = `${badge}${player.nickname} ${isMe ? '(YOU)' : ''}`;
 
       const statusDiv = document.createElement('div');
       if (player.isHost) {
@@ -420,18 +443,26 @@ class MultiplayerGameApp {
       card.appendChild(nameSpan);
       card.appendChild(statusDiv);
 
-      if (player.team === 'RED') {
+      if (isDuel) {
         this.redPlayerListEl.appendChild(card);
         redCount++;
       } else {
-        this.bluePlayerListEl.appendChild(card);
-        blueCount++;
+        if (player.team === 'RED') {
+          this.redPlayerListEl.appendChild(card);
+          redCount++;
+        } else {
+          this.bluePlayerListEl.appendChild(card);
+          blueCount++;
+        }
       }
     });
 
-    const maxPerTeam = lobby.mode === '1v1' ? 1 : 2;
-    this.redCountEl.textContent = `${redCount}/${maxPerTeam}`;
-    this.blueCountEl.textContent = `${blueCount}/${maxPerTeam}`;
+    if (isDuel) {
+      this.redCountEl.textContent = `${lobby.players.length}/8`;
+    } else {
+      this.redCountEl.textContent = `${redCount}/2`;
+      this.blueCountEl.textContent = `${blueCount}/2`;
+    }
   }
 
   // ──────────────── NATURAL WARZONE SIMULATION ────────────────
@@ -969,9 +1000,27 @@ class MultiplayerGameApp {
     this.activeThrowable = 'grenade';
     this.updateTacticalHUD();
 
+    const isDuel = (matchData.mode === 'DUEL' || matchData.mode === 'FFA' || this.currentRoom?.mode === 'DUEL');
+    const DUEL_COLORS = ['#FF3366', '#00A2FF', '#FFD600', '#00E676', '#D500F9', '#00E5FF', '#FF7B00', '#FF4081'];
+
+    const playerIdx = matchData.players?.findIndex(p => p.id === this.myPlayerId) ?? 0;
     const meInRoom = this.currentRoom?.players.find(p => p.id === this.myPlayerId);
-    this.localPlayer.team = meInRoom?.team || 'RED';
-    this.localPlayer.color = this.localPlayer.team === 'BLUE' ? '#00A2FF' : '#FF3366';
+
+    this.localPlayer.team = isDuel ? 'FFA' : (meInRoom?.team || 'RED');
+    this.localPlayer.color = isDuel ? DUEL_COLORS[Math.max(0, playerIdx) % DUEL_COLORS.length] : (this.localPlayer.team === 'BLUE' ? '#00A2FF' : '#FF3366');
+
+    // Register distinct colors for all remote fighters in DUEL mode
+    if (matchData.players) {
+      matchData.players.forEach((p, idx) => {
+        if (p.id !== this.myPlayerId) {
+          const rp = this.remotePlayers.get(p.id) || { id: p.id };
+          rp.color = isDuel ? DUEL_COLORS[idx % DUEL_COLORS.length] : (p.team === 'BLUE' ? '#00A2FF' : '#FF3366');
+          rp.team = isDuel ? 'FFA' : p.team;
+          rp.nickname = p.nickname;
+          this.remotePlayers.set(p.id, rp);
+        }
+      });
+    }
 
     // 20Hz Compact Delta Sync
     if (this.syncInterval) clearInterval(this.syncInterval);

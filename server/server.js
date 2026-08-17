@@ -124,8 +124,8 @@ function handleClientMessage(ws, client, msg) {
         roomCode = generate5DigitCode();
       }
 
-      const matchMode = payload?.mode || '2v2';
-      const maxPlayers = matchMode === '1v1' ? 2 : matchMode === '2v2' ? 4 : 8;
+      const matchMode = payload?.mode || 'DUEL';
+      const maxPlayers = matchMode === '2v2' ? 4 : 8;
 
       const lobby = {
         code: roomCode,
@@ -140,7 +140,7 @@ function handleClientMessage(ws, client, msg) {
       };
 
       client.roomCode = roomCode;
-      client.team = 'RED';
+      client.team = (matchMode === 'DUEL' || matchMode === 'FFA') ? 'FFA' : 'RED';
       client.ready = true;
       client.alive = true;
       client.hp = 100;
@@ -185,7 +185,8 @@ function handleClientMessage(ws, client, msg) {
         else if (p.team === 'BLUE') blueCount++;
       }
 
-      client.team = lobby.mode === 'FFA' ? 'FFA' : (redCount <= blueCount ? 'RED' : 'BLUE');
+      const isDuelMode = (lobby.mode === 'DUEL' || lobby.mode === 'FFA' || lobby.mode === '1v1');
+      client.team = isDuelMode ? 'FFA' : (redCount <= blueCount ? 'RED' : 'BLUE');
       client.roomCode = targetCode;
       client.ready = false;
       client.alive = true;
@@ -205,7 +206,7 @@ function handleClientMessage(ws, client, msg) {
     case 'SET_TEAM': {
       if (!client.roomCode) return;
       const lobby = lobbies.get(client.roomCode);
-      if (!lobby || lobby.mode === 'FFA') return;
+      if (!lobby || lobby.mode === 'DUEL' || lobby.mode === 'FFA') return;
 
       client.team = payload?.team === 'BLUE' ? 'BLUE' : 'RED';
       broadcastLobbyState(client.roomCode);
@@ -226,7 +227,12 @@ function handleClientMessage(ws, client, msg) {
 
       if (payload.mode) {
         lobby.mode = payload.mode;
-        lobby.maxPlayers = payload.mode === '1v1' ? 2 : payload.mode === '2v2' ? 4 : 8;
+        lobby.maxPlayers = payload.mode === '2v2' ? 4 : 8;
+
+        const isDuel = (lobby.mode === 'DUEL' || lobby.mode === 'FFA');
+        lobby.players.forEach(p => {
+          if (isDuel) p.team = 'FFA';
+        });
       }
       broadcastLobbyState(client.roomCode);
       break;
