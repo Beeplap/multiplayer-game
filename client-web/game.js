@@ -338,21 +338,41 @@ class MultiplayerGameApp {
     bindTouchAction(this.btnZoomToggle, () => this.cycleZoomLevel());
   }
 
+  getMaxZoomForWeapon(weapon) {
+    if (weapon === 'sniper') return 3; // 4x Scope (0: 1x, 1: 2x, 2: 3x, 3: 4x)
+    if (weapon === 'rpg') return 2;    // 3x Blast (0: 1x, 1: 2x, 2: 3x)
+    return 0;                          // 1x ONLY for SMG, Shotgun, Pistol, etc.
+  }
+
   cycleZoomLevel() {
-    this.zoomIndex = (this.zoomIndex + 1) % this.zoomPresets.length;
+    const maxIdx = this.getMaxZoomForWeapon(this.currentWeapon);
+    if (maxIdx === 0) {
+      this.zoomIndex = 0;
+      this.applyZoom(true); // Locked at 1x for SMG/Shotgun
+      return;
+    }
+    this.zoomIndex = (this.zoomIndex + 1) % (maxIdx + 1);
     this.applyZoom();
   }
 
-  setZoomLevel(idx) {
-    this.zoomIndex = Math.max(0, Math.min(this.zoomPresets.length - 1, idx));
-    this.applyZoom();
+  setZoomLevel(idx, silent = false) {
+    const maxIdx = this.getMaxZoomForWeapon(this.currentWeapon);
+    this.zoomIndex = Math.max(0, Math.min(maxIdx, idx));
+    this.applyZoom(false, silent);
   }
 
-  applyZoom() {
+  applyZoom(isLocked = false, silent = false) {
     const preset = this.zoomPresets[this.zoomIndex];
     this.targetZoom = preset.scale;
     if (this.zoomValTextEl) this.zoomValTextEl.textContent = preset.label;
-    this.addPickupNotification(`🔍 ZOOM: ${preset.label}`, '#00E5FF');
+
+    if (!silent) {
+      if (isLocked) {
+        this.addPickupNotification(`🔒 1x MAX ZOOM FOR ${this.currentWeapon.toUpperCase()}`, '#FF7B00');
+      } else {
+        this.addPickupNotification(`🔍 ZOOM: ${preset.label}`, '#00E5FF');
+      }
+    }
   }
 
   updateLobbyUI(lobby) {
@@ -454,29 +474,75 @@ class MultiplayerGameApp {
     this.canvas.height = window.innerHeight;
   }
 
+  getGroundYAt(worldX) {
+    const gy = this.groundY; // Base 1080
+    // Flat Outpost Bunker Valley Floor
+    if (worldX >= 1540 && worldX <= 2060) {
+      return gy;
+    }
+    if (worldX < 1540) {
+      // Left side rolling hills, mounds, and dips
+      const hill1 = Math.sin((worldX / 300) * Math.PI) * 32;
+      const hill2 = Math.sin((worldX / 130) * Math.PI) * 16;
+      const taper = Math.min(1, Math.max(0, (1540 - worldX) / 140));
+      return gy - (hill1 + hill2) * taper;
+    } else {
+      // Right side undulating ridges and slopes
+      const hill1 = Math.sin(((worldX - 2060) / 340) * Math.PI) * 35;
+      const hill2 = Math.sin(((worldX - 2060) / 150) * Math.PI) * 18;
+      const taper = Math.min(1, Math.max(0, (worldX - 2060) / 140));
+      return gy - (hill1 + hill2) * taper;
+    }
+  }
+
+  getPlatformTopY(plat, worldX) {
+    if (plat.type === 'GROUND') {
+      return this.getGroundYAt(worldX);
+    }
+    const relX = worldX - plat.x;
+    const progress = Math.max(0, Math.min(1, relX / plat.w));
+
+    if (plat.shape === 'HILL') {
+      return plat.y - Math.sin(progress * Math.PI) * (plat.curveHeight || 28);
+    } else if (plat.shape === 'VALLEY') {
+      return plat.y + Math.sin(progress * Math.PI) * (plat.curveHeight || 24);
+    } else if (plat.shape === 'DOUBLE_HILL') {
+      return plat.y - Math.sin(progress * Math.PI * 2) * (plat.curveHeight || 22);
+    } else if (plat.shape === 'BOWL_ISLAND') {
+      return plat.y - Math.sin(progress * Math.PI) * (plat.curveHeight || 18);
+    }
+    return plat.y;
+  }
+
   buildNaturalMap() {
     const gy = this.groundY;
 
     this.platforms = [
-      { x: 0, y: gy, w: this.worldWidth, h: 120, type: 'GROUND' },
-      { x: 280, y: 880, w: 280, h: 32, type: 'ROCK' },
-      { x: 440, y: 660, w: 240, h: 30, type: 'ROCK' },
-      { x: 860, y: 780, w: 320, h: 34, type: 'ROCK' },
-      { x: 1080, y: 540, w: 260, h: 30, type: 'ROCK' },
-      { x: 1600, y: 840, w: 400, h: 36, type: 'HOUSE_ROOF' },
-      { x: 1600, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
-      { x: 1974, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
-      { x: 2200, y: 840, w: 280, h: 32, type: 'ROCK' },
-      { x: 2460, y: 640, w: 300, h: 34, type: 'ROCK' },
-      { x: 2880, y: 760, w: 340, h: 32, type: 'ROCK' },
-      { x: 3080, y: 520, w: 260, h: 30, type: 'ROCK' }
+      { x: 0, y: gy, w: this.worldWidth, h: 160, type: 'GROUND' },
+
+      // Left Organic Rock Islands (Bowl islands, mounds, cave arches)
+      { x: 260, y: 840, w: 320, h: 95, type: 'ROCK', shape: 'BOWL_ISLAND', curveHeight: 26, hasPalm: true },
+      { x: 480, y: 640, w: 260, h: 85, type: 'ROCK', shape: 'HILL', curveHeight: 32 },
+      { x: 860, y: 760, w: 360, h: 100, type: 'ROCK', shape: 'DOUBLE_HILL', curveHeight: 28, hasPalm: true },
+      { x: 1100, y: 520, w: 280, h: 85, type: 'ROCK', shape: 'BOWL_ISLAND', curveHeight: 22 },
+
+      // Central 3D Textured Wooden Outpost (Vault for Legendary Rocket Launcher)
+      { x: 1580, y: 840, w: 440, h: 42, type: 'HOUSE_ROOF' },
+      { x: 1580, y: 882, w: 40, h: 84, type: 'HOUSE_WALL' },
+      { x: 1980, y: 882, w: 40, h: 84, type: 'HOUSE_WALL' },
+
+      // Right Organic Rock Islands (High vantage sniper points, rolling dunes)
+      { x: 2180, y: 820, w: 300, h: 85, type: 'ROCK', shape: 'HILL', curveHeight: 28 },
+      { x: 2480, y: 620, w: 340, h: 90, type: 'ROCK', shape: 'BOWL_ISLAND', curveHeight: 26, hasPalm: true },
+      { x: 2860, y: 740, w: 360, h: 95, type: 'ROCK', shape: 'DOUBLE_HILL', curveHeight: 28 },
+      { x: 3080, y: 500, w: 280, h: 85, type: 'ROCK', shape: 'HILL', curveHeight: 25, hasPalm: true }
     ];
 
     this.tacticalPickups = [
-      { id: 'pk_g1', type: 'GRENADE', x: 460, y: 620, label: '💣 FRAG GRENADES', available: true },
-      { id: 'pk_m1', type: 'MINE', x: 1140, y: 500, label: '⚡ PROXIMITY MINE', available: true },
-      { id: 'pk_s1', type: 'TOXIC_GAS', x: 2520, y: 600, label: '☣️ TOXIC MUSTARD GAS', available: true },
-      { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 720, label: '❤️ MEDICAL CASE', available: true }
+      { id: 'pk_g1', type: 'GRENADE', x: 490, y: 590, label: '💣 FRAG GRENADES', available: true },
+      { id: 'pk_m1', type: 'MINE', x: 1160, y: 480, label: '⚡ PROXIMITY MINE', available: true },
+      { id: 'pk_s1', type: 'TOXIC_GAS', x: 2540, y: 570, label: '☣️ TOXIC MUSTARD GAS', available: true },
+      { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 690, label: '❤️ MEDICAL CASE', available: true }
     ];
 
     this.groundGuns = [
@@ -486,7 +552,7 @@ class MultiplayerGameApp {
         name: 'RPG ROCKET LAUNCHER',
         rarity: 'LEGENDARY',
         x: 1800,
-        y: 1030,
+        y: 1040,
         available: true
       }
     ];
@@ -982,6 +1048,9 @@ class MultiplayerGameApp {
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
     this.localPlayer.inventory = { grenades: 2, mines: 1, toxic_gas: 1 };
+    this.currentWeapon = 'uzi';
+    this.hudWeaponName.textContent = 'DUAL SMG UZI';
+    this.setZoomLevel(0, true);
     this.updateTacticalHUD();
 
     this.send('RESPAWN_REQUEST', {
