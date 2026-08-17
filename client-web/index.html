@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Mini Militia 2D — Natural Warzone</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0e14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Mini Militia 2D — Tactical Warzone</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,6 +15,16 @@
 </head>
 <body>
   <div id="app-root">
+
+    <!-- ROTATE DEVICE OVERLAY (FOR PORTRAIT MOBILE PHONES) -->
+    <div id="rotate-device-overlay" class="rotate-overlay">
+      <div class="rotate-card glass-panel">
+        <div class="rotate-anim-icon">🔄</div>
+        <h2>ROTATE YOUR DEVICE</h2>
+        <p>Mini Militia 2D requires <strong>Landscape Mode</strong> for dual-stick tactical combat.</p>
+        <span class="rotate-hint">Turn phone sideways to enter the arena</span>
+      </div>
+    </div>
 
     <!-- SCREEN 1: MAIN MENU & PRIVATE LOBBY CREATION -->
     <div id="screen-main-menu" class="screen active">
@@ -28,7 +42,7 @@
 
         <div class="server-config-row">
           <label for="server-url">SERVER ADDRESS</label>
-          <input type="text" id="server-url" value="wss://multiplayer-game-vq8m.onrender.com" placeholder="wss://multiplayer-game-vq8m.onrender.com">
+          <input type="text" id="server-url" value="ws://localhost:3000">
         </div>
 
         <div class="menu-action-grid">
@@ -49,7 +63,7 @@
         </div>
 
         <div class="quick-info-box">
-          <span>🚀 Infinite Flight • 🌄 Wide Camera Scroll • 🏠 Central Bunker Shelter • 💥 Press [F] to Equip Guns</span>
+          <span>🚀 Infinite Flight • 📱 Landscape Mobile Ready • 💥 [F] Equip Gun Prompt</span>
         </div>
       </div>
     </div>
@@ -148,17 +162,18 @@
           <div class="score-team blue"><span id="score-blue">0</span></div>
         </div>
 
-        <!-- Top Right Weapon Quick-Status -->
+        <!-- Top Right Weapon Status & Fullscreen Toggle -->
         <div class="hud-top-right">
           <div class="weapon-card">
             <span id="hud-weapon-name" class="weapon-name">DUAL SMG UZI</span>
             <span class="ammo-count highlight">∞ UNLIMITED</span>
           </div>
-          <button id="btn-exit-game" class="btn-icon-small" title="Exit to Lobby">✕</button>
+          <button id="btn-fullscreen-toggle" class="btn-icon-small" title="Toggle Fullscreen">⛶</button>
+          <button id="btn-exit-game" class="btn-icon-small danger" title="Exit to Lobby">✕</button>
         </div>
       </div>
 
-      <!-- Interactive [F] Equip Gun Prompt (Appears when near weapon drop) -->
+      <!-- Interactive [F] Equip Gun Prompt (Mobile Tap Friendly) -->
       <div id="equip-prompt-box" class="equip-prompt-box hidden">
         <button id="btn-equip-prompt" class="btn-equip-action">
           <span class="key-badge">F</span>
@@ -195,8 +210,9 @@
         <canvas id="game-canvas"></canvas>
       </div>
 
-      <!-- Mobile Touch Controls -->
+      <!-- Mobile Touch Dual-Stick Controls -->
       <div class="touch-controls" id="touch-controls">
+        <!-- Left Joystick: Movement & Upward Jetpack Thrust -->
         <div class="joystick-zone left" id="joy-left-zone">
           <div class="joystick-base" id="joy-left-base">
             <div class="joystick-thumb" id="joy-left-thumb"></div>
@@ -204,11 +220,12 @@
           <span class="joy-label">MOVE / JETPACK</span>
         </div>
 
+        <!-- Right Joystick: 360° Aim & Continuous Auto-Fire -->
         <div class="joystick-zone right" id="joy-right-zone">
           <div class="joystick-base" id="joy-right-base">
             <div class="joystick-thumb" id="joy-right-thumb"></div>
           </div>
-          <span class="joy-label">AIM / AUTO-FIRE</span>
+          <span class="joy-label">AIM & AUTO-FIRE</span>
         </div>
       </div>
     </div>

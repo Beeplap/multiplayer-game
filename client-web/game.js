@@ -60,6 +60,12 @@ class MultiplayerGameApp {
     this.tacGrenadeCountEl = document.getElementById('tac-grenade-count');
     this.tacMineCountEl = document.getElementById('tac-mine-count');
     this.tacSmokeCountEl = document.getElementById('tac-smoke-count');
+
+    this.hudPingValEl = document.getElementById('hud-ping-val');
+    this.pingDotEl = document.getElementById('ping-dot');
+
+    this.currentPing = null;
+    this.pingInterval = null;
   }
 
   loadAssets() {
@@ -80,18 +86,52 @@ class MultiplayerGameApp {
   }
 
   // ──────────────── WEBSOCKET & NETWORKING ────────────────
-  initWebSocket() {
-    let wsUrl = this.serverUrlInput.value.trim();
-    if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      wsUrl = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+  formatServerWsUrl(rawUrl) {
+    let url = (rawUrl || '').trim();
+    if (!url || url.includes('localhost')) {
+      if (window.location.host && !window.location.host.includes('localhost') && window.location.protocol !== 'file:') {
+        const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        return `${proto}${window.location.host}`;
+      }
+      return 'wss://multiplayer-game-vq8m.onrender.com';
     }
 
+    if (url.startsWith('https://')) {
+      url = url.replace(/^https:\/\//i, 'wss://');
+    } else if (url.startsWith('http://')) {
+      url = url.replace(/^http:\/\//i, 'ws://');
+    } else if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+      url = 'wss://' + url;
+    }
+    return url.replace(/\/+$/, '');
+  }
+
+  initWebSocket() {
+    // Auto-populate default public server URL
+    if (!this.serverUrlInput.value || this.serverUrlInput.value.includes('localhost')) {
+      if (window.location.host && !window.location.host.includes('localhost') && window.location.protocol !== 'file:') {
+        const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        this.serverUrlInput.value = `${proto}${window.location.host}`;
+      } else {
+        this.serverUrlInput.value = 'wss://multiplayer-game-vq8m.onrender.com';
+      }
+    }
+
+    const wsUrl = this.formatServerWsUrl(this.serverUrlInput.value);
+    this.currentWsUrl = wsUrl;
+
     try {
+      if (this.ws) {
+        try { this.ws.close(); } catch (e) {}
+      }
+
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         console.log(' Connected to Game Server:', wsUrl);
-        this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.startPingLoop();
       };
 
       this.ws.onmessage = (event) => {
@@ -104,10 +144,92 @@ class MultiplayerGameApp {
       };
 
       this.ws.onclose = () => {
-        setTimeout(() => this.initWebSocket(), 3000);
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        setTimeout(() => {
+          if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+            this.initWebSocket();
+          }
+        }, 3000);
+      };
+
+      this.ws.onerror = (err) => {
+        console.warn('WebSocket connection error:', err);
       };
     } catch (e) {
       console.error('WebSocket init error', e);
+    }
+  }
+
+  startPingLoop() {
+    if (this.pingInterval) clearInterval(this.pingInterval);
+    const sendPing = () => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send('PING', { clientTime: performance.now() });
+      }
+    };
+    sendPing();
+    this.pingInterval = setInterval(sendPing, 1000);
+  }
+
+  handlePong(payload) {
+    if (payload && payload.clientTime !== undefined) {
+      const rtt = Math.max(1, Math.round(performance.now() - payload.clientTime));
+      if (this.currentPing === null) {
+        this.currentPing = rtt;
+      } else {
+        // Exponential Moving Average filter for smooth, accurate ping display
+        this.currentPing = Math.round(this.currentPing * 0.65 + rtt * 0.35);
+      }
+      this.updatePingHUD(this.currentPing);
+    }
+  }
+
+  updatePingHUD(ping) {
+    if (this.hudPingValEl) {
+      this.hudPingValEl.textContent = `${ping} ms`;
+    }
+    if (this.pingDotEl) {
+      this.pingDotEl.classList.remove('good', 'medium', 'bad');
+      if (ping < 70) {
+        this.pingDotEl.classList.add('good');
+      } else if (ping < 150) {
+        this.pingDotEl.classList.add('medium');
+      } else {
+        this.pingDotEl.classList.add('bad');
+      }
+    }
+  }
+
+  ensureConnectedToServer(callback) {
+    const wsUrl = this.formatServerWsUrl(this.serverUrlInput.value);
+    this.serverUrlInput.value = wsUrl;
+
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.currentWsUrl !== wsUrl) {
+      this.currentWsUrl = wsUrl;
+      if (this.ws) {
+        try { this.ws.close(); } catch (e) {}
+      }
+      this.ws = new WebSocket(wsUrl);
+      this.ws.onopen = () => {
+        console.log(' Connected to Game Server:', wsUrl);
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.startPingLoop();
+        if (callback) callback();
+      };
+      this.ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this.handleServerMessage(msg);
+        } catch (e) {
+          console.error('Failed to parse server msg', e);
+        }
+      };
+      this.ws.onclose = () => {
+        if (this.pingInterval) clearInterval(this.pingInterval);
+      };
+    } else {
+      if (callback) callback();
     }
   }
 
@@ -121,6 +243,10 @@ class MultiplayerGameApp {
     const { type, payload } = msg;
 
     switch (type) {
+      case 'PONG':
+        this.handlePong(payload);
+        break;
+
       case 'CONNECTED':
         this.myPlayerId = payload.playerId;
         break;
@@ -190,9 +316,11 @@ class MultiplayerGameApp {
   // ──────────────── LOBBY MANAGEMENT ────────────────
   setupEventListeners() {
     document.getElementById('btn-create-lobby').addEventListener('click', () => {
-      const nickname = this.nicknameInput.value.trim() || 'Commander';
-      this.send('SET_NICKNAME', { nickname });
-      this.send('CREATE_LOBBY', { mode: '2v2' });
+      this.ensureConnectedToServer(() => {
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.send('CREATE_LOBBY', { mode: '2v2' });
+      });
     });
 
     document.getElementById('btn-join-lobby').addEventListener('click', () => {
@@ -201,9 +329,11 @@ class MultiplayerGameApp {
         alert('Please enter a valid 5-digit room code!');
         return;
       }
-      const nickname = this.nicknameInput.value.trim() || 'Commander';
-      this.send('SET_NICKNAME', { nickname });
-      this.send('JOIN_LOBBY', { roomCode: code });
+      this.ensureConnectedToServer(() => {
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.send('JOIN_LOBBY', { roomCode: code });
+      });
     });
 
     document.getElementById('btn-copy-code').addEventListener('click', () => {
@@ -246,13 +376,32 @@ class MultiplayerGameApp {
       this.showScreen('lobby');
     });
 
-    this.btnEquipPrompt.addEventListener('click', () => {
-      this.equipNearbyGun();
-    });
+    // Fullscreen Toggle Handler
+    const toggleFullscreen = () => {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    };
+    const fsBtn = document.getElementById('btn-fullscreen-toggle');
+    if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen);
 
-    document.getElementById('btn-throw-grenade').addEventListener('click', () => this.triggerGrenadeThrow());
-    document.getElementById('btn-plant-mine').addEventListener('click', () => this.triggerMinePlant());
-    document.getElementById('btn-throw-smoke').addEventListener('click', () => this.triggerSmokeDeploy());
+    // Instant Mobile Touch Support for Action & Tactical Buttons (No 300ms delay)
+    const bindTouchAction = (id, callback) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', (e) => { e.preventDefault(); callback(); });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); callback(); });
+    };
+
+    bindTouchAction('btn-equip-prompt', () => this.equipNearbyGun());
+    bindTouchAction('btn-throw-grenade', () => this.triggerGrenadeThrow());
+    bindTouchAction('btn-plant-mine', () => this.triggerMinePlant());
+    bindTouchAction('btn-throw-smoke', () => this.triggerSmokeDeploy());
   }
 
   updateLobbyUI(lobby) {
