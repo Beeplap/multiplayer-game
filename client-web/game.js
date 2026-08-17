@@ -1490,10 +1490,31 @@ class MultiplayerGameApp {
     const camX = this.camera.x;
     const camY = this.camera.y;
 
-    ctx.clearRect(0, 0, W, H);
+    // 1. Stable Photorealistic Mountain Backdrop with Smooth Parallax
+    if (this.assets.loaded && this.assets.bg.complete) {
+      const bg = this.assets.bg;
 
-    // 1. Stylized Jungle & Alpine Battlefield Backdrop (Authentic Doodle Army / Mini Militia Aesthetic)
-    this.drawStylizedBackdrop(ctx, W, H, camX, camY);
+      const scale = Math.max(W / bg.width, H / bg.height) * 1.08;
+      const scaledW = bg.width * scale;
+      const scaledH = bg.height * scale;
+
+      const maxCamX = Math.max(1, this.worldWidth - W);
+      const bgTravelX = Math.max(0, scaledW - W);
+      const bgX = -(Math.max(0, camX - W / 2) / maxCamX) * (bgTravelX * 0.25);
+      const bgY = (H - scaledH) / 2;
+
+      ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
+
+      const mistGrad = ctx.createLinearGradient(0, H * 0.55, 0, H);
+      mistGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      mistGrad.addColorStop(0.7, 'rgba(180, 205, 215, 0.12)');
+      mistGrad.addColorStop(1, 'rgba(30, 45, 35, 0.35)');
+      ctx.fillStyle = mistGrad;
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.fillStyle = '#1A2E20';
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // ──────────────── WORLD SPACE (DYNAMIC 1x-4x ZOOM) ────────────────
     ctx.save();
@@ -1766,12 +1787,8 @@ class MultiplayerGameApp {
     ];
 
     for (const win of windows) {
-      // Sky Cutout View
-      const winSkyGrad = ctx.createLinearGradient(win.x, win.y, win.x, win.y + win.h);
-      winSkyGrad.addColorStop(0, '#7EC8E3');
-      winSkyGrad.addColorStop(1, '#A5D6A7');
-      ctx.fillStyle = winSkyGrad;
-      ctx.fillRect(win.x, win.y, win.w, win.h);
+      // Clear opening so background mountain vista shows through windows
+      ctx.clearRect(win.x, win.y, win.w, win.h);
 
       // Window Interior Drop Shadow
       ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
