@@ -2564,31 +2564,14 @@ class MultiplayerGameApp {
     ctx.shadowColor = glowColor;
 
     if (gun.type === 'shotgun') {
-      ctx.fillStyle = '#222834';
-      ctx.fillRect(-20, -5, 40, 9);
-      ctx.fillStyle = '#111';
-      ctx.fillRect(20, -3, 10, 5);
-      ctx.fillStyle = '#8B4513';
-      ctx.fillRect(-6, 2, 14, 4);
+      this.drawDetailedShotgun(ctx, 0, 0, 1.05);
     } else if (gun.type === 'sniper') {
-      ctx.fillStyle = '#1C2330';
-      ctx.fillRect(-24, -5, 36, 7);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(12, -3, 24, 4);
-      ctx.fillStyle = '#00FF66';
-      ctx.fillRect(6, -10, 4, 4);
+      this.drawDetailedSniper(ctx, 0, 0, 1.05);
     } else if (gun.type === 'rpg') {
-      ctx.fillStyle = '#3E4D38';
-      ctx.fillRect(-22, -7, 38, 12);
-      ctx.fillStyle = '#FF3366';
-      ctx.beginPath();
-      ctx.moveTo(16, -7); ctx.lineTo(26, -1); ctx.lineTo(16, 5);
-      ctx.fill();
+      this.drawDetailedRPG(ctx, 0, 0, 1.05);
     } else {
-      ctx.fillStyle = '#1B1F28';
-      ctx.fillRect(-12, -5, 24, 9);
-      ctx.fillStyle = '#00E5FF';
-      ctx.fillRect(-10, -4, 16, 2);
+      // Authentic 3D Micro-Uzi SMG Model
+      this.drawDetailedUzi(ctx, 0, 0, 1.25);
     }
     ctx.restore();
 
@@ -2812,42 +2795,305 @@ class MultiplayerGameApp {
   drawWeaponModel(ctx, wep, teamColor) {
     ctx.save();
     if (wep === 'uzi') {
-      ctx.fillStyle = '#1B1F28';
-      ctx.fillRect(10, -5, 18, 9);
-      ctx.fillStyle = '#0E1116';
-      ctx.fillRect(28, -3, 8, 4);
-      ctx.fillRect(14, 4, 5, 8);
-      ctx.fillStyle = '#00E5FF';
-      ctx.fillRect(12, -4, 12, 2);
+      this.drawDetailedUzi(ctx, 16, 2, 0.95);
     } else if (wep === 'shotgun') {
-      ctx.fillStyle = '#232936';
-      ctx.fillRect(8, -6, 26, 10);
-      ctx.fillStyle = '#111';
-      ctx.fillRect(34, -4, 10, 6);
-      ctx.fillStyle = '#8B4513';
-      ctx.fillRect(16, 2, 10, 4);
-      ctx.fillStyle = '#FF7B00';
-      ctx.fillRect(10, -5, 14, 2);
+      this.drawDetailedShotgun(ctx, 16, 1, 0.95);
     } else if (wep === 'sniper') {
-      ctx.fillStyle = '#1A212D';
-      ctx.fillRect(6, -5, 24, 8);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(30, -3, 22, 4);
-      ctx.fillRect(48, -4, 4, 6);
-      ctx.fillStyle = '#111';
-      ctx.fillRect(12, -10, 14, 5);
-      ctx.fillStyle = '#00FF66';
-      ctx.fillRect(24, -9, 3, 3);
+      this.drawDetailedSniper(ctx, 16, 1, 0.92);
     } else if (wep === 'rpg') {
-      ctx.fillStyle = '#3B4834';
-      ctx.fillRect(4, -8, 30, 14);
-      ctx.fillStyle = '#1A2118';
-      ctx.fillRect(34, -7, 6, 12);
-      ctx.fillStyle = '#FF3366';
-      ctx.beginPath();
-      ctx.moveTo(40, -8); ctx.lineTo(50, -1); ctx.lineTo(40, 6);
-      ctx.fill();
+      this.drawDetailedRPG(ctx, 14, 0, 0.95);
     }
+    ctx.restore();
+  }
+
+  // ──────────────── AUTHENTIC DETAILED 3D FIREARM MODELS ────────────────
+
+  // 1. Authentic 3D Micro-Uzi Tactical Submachine Gun
+  drawDetailedUzi(ctx, x, y, scale = 1.0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // A. Extended 9mm Steel Magazine (Protruding downwards from grip)
+    ctx.fillStyle = '#1E2429';
+    ctx.fillRect(-1, 8, 5, 14);
+    // Magazine Metallic Edge Highlight
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(-1, 8, 1.5, 14);
+    // Baseplate
+    ctx.fillStyle = '#101417';
+    ctx.fillRect(-1.5, 21, 6, 2);
+
+    // B. Polymer Ribbed Pistol Grip (Angled ergonomic grip)
+    ctx.fillStyle = '#1A1E23';
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(3, 0);
+    ctx.lineTo(2, 11);
+    ctx.lineTo(-5, 11);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#0E1114';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Grip horizontal friction grooves
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.beginPath();
+    ctx.moveTo(-3, 3); ctx.lineTo(1.5, 3);
+    ctx.moveTo(-3.5, 6); ctx.lineTo(1, 6);
+    ctx.moveTo(-4, 9); ctx.lineTo(0.5, 9);
+    ctx.stroke();
+
+    // C. Steel Trigger Guard & Silver Trigger Blade
+    ctx.strokeStyle = '#15191D';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-3, 1);
+    ctx.lineTo(-8, 1);
+    ctx.lineTo(-8, 7);
+    ctx.lineTo(-4, 7);
+    ctx.stroke();
+
+    // Silver Trigger
+    ctx.strokeStyle = '#CFD8DC';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-5, 2);
+    ctx.lineTo(-7, 5);
+    ctx.stroke();
+
+    // D. Main Receiver Body (Stamped Gunmetal Steel with 3D Bevel)
+    const recGrad = ctx.createLinearGradient(0, -6, 0, 3);
+    recGrad.addColorStop(0, '#546E7A');
+    recGrad.addColorStop(0.25, '#37474F');
+    recGrad.addColorStop(0.75, '#263238');
+    recGrad.addColorStop(1, '#1A2126');
+
+    ctx.fillStyle = recGrad;
+    ctx.fillRect(-14, -6, 26, 8);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-14, -6, 26, 8);
+
+    // E. Ejection Port & Brass Bullet Casing in Chamber
+    ctx.fillStyle = '#0D1114';
+    ctx.fillRect(-4, -5, 8, 4);
+    ctx.fillStyle = '#FFD54F'; // gold/brass bullet casing
+    ctx.fillRect(-1, -4, 4, 2);
+
+    // F. Short Steel Barrel & Muzzle Flash Hider
+    ctx.fillStyle = '#21272C';
+    ctx.fillRect(12, -4, 8, 4);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(12, -4, 8, 4);
+    // Muzzle Crown Ring / Flash Hider Thread
+    ctx.fillStyle = '#455A64';
+    ctx.fillRect(18, -5, 2.5, 6);
+
+    // G. Top Receiver Iron Sights & Cyan Charging Knob
+    // Rear Iron Sight Ears
+    ctx.fillStyle = '#181C20';
+    ctx.fillRect(-13, -8, 3, 2.5);
+    // Front Iron Sight Post
+    ctx.fillRect(10, -8, 2, 2.5);
+    // Tactical Cyan Charging Handle
+    ctx.fillStyle = '#00E5FF';
+    ctx.fillRect(-2, -8, 4, 2.5);
+
+    // H. Folded Steel Wire Skeleton Buttstock (Resting on top)
+    ctx.strokeStyle = '#78909C';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-14, -1);
+    ctx.lineTo(-15, -6);
+    ctx.lineTo(8, -6);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // 2. Authentic 3D Combat Pump Shotgun
+  drawDetailedShotgun(ctx, x, y, scale = 1.0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // A. Contoured Polymer/Wood Stock
+    ctx.fillStyle = '#6D4C41';
+    ctx.beginPath();
+    ctx.moveTo(-18, 4);
+    ctx.lineTo(-6, 0);
+    ctx.lineTo(-6, 8);
+    ctx.lineTo(-16, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#3E2723';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // B. Blued Steel Receiver Body
+    const recGrad = ctx.createLinearGradient(0, -5, 0, 5);
+    recGrad.addColorStop(0, '#455A64');
+    recGrad.addColorStop(0.5, '#263238');
+    recGrad.addColorStop(1, '#1A2126');
+    ctx.fillStyle = recGrad;
+    ctx.fillRect(-6, -5, 20, 10);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-6, -5, 20, 10);
+
+    // C. Trigger Guard
+    ctx.strokeStyle = '#15191D';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-4, 3, 6, 6);
+
+    // D. Long Steel Barrel & Under-Barrel Tubular Magazine
+    ctx.fillStyle = '#1E2328';
+    ctx.fillRect(14, -4, 24, 4); // main barrel
+    ctx.fillRect(14, 1, 18, 3.5); // mag tube
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(14, -4, 24, 4);
+
+    // Brass Front Bead Sight
+    ctx.fillStyle = '#FFD54F';
+    ctx.beginPath();
+    ctx.arc(36, -5, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // E. Ribbed Pump Forend Grip
+    ctx.fillStyle = '#FF7B00';
+    ctx.fillRect(18, 0, 10, 5);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(18, 0, 10, 5);
+
+    ctx.restore();
+  }
+
+  // 3. Authentic 3D Marksman Precision Sniper Rifle
+  drawDetailedSniper(ctx, x, y, scale = 1.0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // A. Tactical Sniper Stock with Cheek Riser
+    ctx.fillStyle = '#1A212D';
+    ctx.beginPath();
+    ctx.moveTo(-22, -2);
+    ctx.lineTo(-8, -2);
+    ctx.lineTo(-8, 8);
+    ctx.lineTo(-18, 12);
+    ctx.lineTo(-22, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+
+    // B. Long Precision Fluted Barrel
+    ctx.fillStyle = '#263238';
+    ctx.fillRect(10, -3, 34, 4.5);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(10, -3, 34, 4.5);
+
+    // Heavy Muzzle Brake at Barrel Tip
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(42, -4.5, 6, 7.5);
+    ctx.strokeStyle = '#101417';
+    ctx.strokeRect(42, -4.5, 6, 7.5);
+
+    // C. Steel Receiver & Curved Magazine
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(-8, -4, 18, 8);
+    ctx.strokeStyle = '#101417';
+    ctx.strokeRect(-8, -4, 18, 8);
+    // Short 7.62mm Mag
+    ctx.fillStyle = '#21272C';
+    ctx.fillRect(0, 4, 7, 8);
+
+    // D. High-Magnification Sniper Scope with Dual Rings & Glowing Green Reticle Lens
+    ctx.fillStyle = '#101417';
+    ctx.fillRect(-4, -10, 20, 4.5); // scope tube
+    ctx.fillRect(-7, -11, 4, 6.5); // eyepiece
+    ctx.fillRect(14, -11.5, 5, 7.5); // objective bell
+    // Glowing Green Scope Lens Reticle
+    ctx.fillStyle = '#00FF66';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#00FF66';
+    ctx.fillRect(17.5, -10.5, 1.5, 5.5);
+    ctx.shadowBlur = 0;
+
+    // Scope Mount Rings
+    ctx.strokeStyle = '#455A64';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-2, -6, 2.5, 2.5);
+    ctx.strokeRect(10, -6, 2.5, 2.5);
+
+    ctx.restore();
+  }
+
+  // 4. Authentic 3D RPG Rocket Launcher (Bazooka)
+  drawDetailedRPG(ctx, x, y, scale = 1.0) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // A. Olive Drab Cylindrical Tube
+    const tubeGrad = ctx.createLinearGradient(0, -6, 0, 6);
+    tubeGrad.addColorStop(0, '#556B2F');
+    tubeGrad.addColorStop(0.35, '#3E4D38');
+    tubeGrad.addColorStop(0.8, '#2E3B29');
+    tubeGrad.addColorStop(1, '#1A2118');
+    ctx.fillStyle = tubeGrad;
+    ctx.fillRect(-16, -6, 42, 12);
+    ctx.strokeStyle = '#101417';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-16, -6, 42, 12);
+
+    // Heat Shield Wood Wrap
+    ctx.fillStyle = '#8D6E63';
+    ctx.fillRect(-6, -6.5, 16, 13);
+    ctx.strokeStyle = '#3E2723';
+    ctx.strokeRect(-6, -6.5, 16, 13);
+
+    // B. Rear Exhaust Venturi Funnel
+    ctx.fillStyle = '#263238';
+    ctx.beginPath();
+    ctx.moveTo(-16, -6);
+    ctx.lineTo(-24, -9);
+    ctx.lineTo(-24, 9);
+    ctx.lineTo(-16, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#101417';
+    ctx.stroke();
+
+    // C. Dual Pistol Grips & Trigger
+    ctx.fillStyle = '#181C20';
+    ctx.fillRect(-2, 6, 5, 9);
+    ctx.fillRect(16, 6, 5, 8);
+
+    // D. Rocket Warhead with Red Conical Explosive Nose Tip
+    ctx.fillStyle = '#4B5320';
+    ctx.fillRect(26, -7, 8, 14);
+    // Red High-Explosive Nose Cone
+    ctx.fillStyle = '#FF3366';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#FF3366';
+    ctx.beginPath();
+    ctx.moveTo(34, -7);
+    ctx.lineTo(46, 0);
+    ctx.lineTo(34, 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#101417';
+    ctx.stroke();
+
     ctx.restore();
   }
 
