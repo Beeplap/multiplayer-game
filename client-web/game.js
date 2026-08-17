@@ -22,12 +22,12 @@ class MultiplayerGameApp {
     this.respawnTimer = 0;
     this.toxicDamageTick = 0;
 
-    // Dynamic 1x-4x Zoom System
+    // Balanced 1x-4x Tactical Zoom Presets (Optimized field of view without shrinking terrain)
     this.zoomPresets = [
       { label: '1x', scale: 1.0 },
-      { label: '2x', scale: 0.72 },
-      { label: '3x', scale: 0.50 },
-      { label: '4x', scale: 0.35 }
+      { label: '2x', scale: 0.90 },
+      { label: '3x', scale: 0.80 },
+      { label: '4x', scale: 0.70 }
     ];
     this.zoomIndex = 0;
     this.currentZoom = 1.0;
@@ -1119,8 +1119,22 @@ class MultiplayerGameApp {
     const halfVisW = (this.canvas.width / 2) / this.currentZoom;
     const halfVisH = (this.canvas.height / 2) / this.currentZoom;
 
-    this.camera.x = Math.max(halfVisW, Math.min(this.worldWidth - halfVisW, this.camera.x));
-    this.camera.y = Math.max(halfVisH, Math.min(this.worldHeight - halfVisH, this.camera.y));
+    // Horizontal clamping
+    if (this.worldWidth > halfVisW * 2) {
+      this.camera.x = Math.max(halfVisW, Math.min(this.worldWidth - halfVisW, this.camera.x));
+    } else {
+      this.camera.x = this.worldWidth / 2;
+    }
+
+    // Vertical clamping: ensure terrain remains properly grounded
+    const curGround = this.getGroundYAt(this.localPlayer.x);
+    const maxCamY = curGround + 80 - halfVisH;
+    const minCamY = halfVisH;
+    if (maxCamY > minCamY) {
+      this.camera.y = Math.max(minCamY, Math.min(maxCamY, this.camera.y));
+    } else {
+      this.camera.y = Math.max(minCamY, curGround - halfVisH * 0.4);
+    }
   }
 
   updatePhysics() {
@@ -2410,11 +2424,11 @@ class MultiplayerGameApp {
 
     const stepX = 18;
     const totalSamples = Math.ceil(this.worldWidth / stepX);
-    const bottomY = plat.y + plat.h + 200;
+    const bottomY = this.worldHeight + 2500;
 
-    // A. Build Organic Ground Polygon
+    // A. Build Organic Ground Polygon (Deep Subterranean Bedrock)
     ctx.beginPath();
-    ctx.moveTo(0, this.getGroundYAt(0));
+    ctx.moveTo(-500, this.getGroundYAt(0));
 
     for (let i = 0; i <= totalSamples; i++) {
       const gx = Math.min(this.worldWidth, i * stepX);
@@ -2422,12 +2436,13 @@ class MultiplayerGameApp {
       ctx.lineTo(gx, gy);
     }
 
-    ctx.lineTo(this.worldWidth, bottomY);
-    ctx.lineTo(0, bottomY);
+    ctx.lineTo(this.worldWidth + 500, this.getGroundYAt(this.worldWidth));
+    ctx.lineTo(this.worldWidth + 500, bottomY);
+    ctx.lineTo(-500, bottomY);
     ctx.closePath();
 
     // B. Subterranean Deep Soil Strata Fill
-    const earthGrad = ctx.createLinearGradient(0, plat.y - 40, 0, bottomY);
+    const earthGrad = ctx.createLinearGradient(0, plat.y - 40, 0, plat.y + 700);
     earthGrad.addColorStop(0, '#5D4037');
     earthGrad.addColorStop(0.2, '#4E342E');
     earthGrad.addColorStop(0.5, '#3E2723');
