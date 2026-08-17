@@ -638,15 +638,15 @@ class MultiplayerGameApp {
 
       // Key F: Throw Active Throwable
       if (key === 'f') this.throwActiveItem();
-
-      // Left Shift / Shift Key: Toggle Zoom Level (1x -> 2x -> 3x -> 4x)
-      if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-        this.cycleZoomLevel();
-      }
     });
 
     window.addEventListener('keyup', (e) => {
       this.keys[e.key.toLowerCase()] = false;
+
+      // Left Shift / Shift Key: Toggle Zoom Level ONLY when key is released (prevents hold-repeat)
+      if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+        this.cycleZoomLevel();
+      }
     });
 
     this.canvas.addEventListener('mousemove', (e) => {
@@ -1108,32 +1108,28 @@ class MultiplayerGameApp {
   }
 
   updateCamera() {
-    this.currentZoom += (this.targetZoom - this.currentZoom) * 0.08;
+    // Ultra-smooth exponential zoom smoothing (zero jitter)
+    this.currentZoom += (this.targetZoom - this.currentZoom) * 0.06;
 
-    const targetX = this.localPlayer.x;
-    const targetY = this.localPlayer.y;
-
-    this.camera.x += (targetX - this.camera.x) * 0.08;
-    this.camera.y += (targetY - this.camera.y) * 0.08;
+    // Smooth position interpolation directly tracking player center
+    this.camera.x += (this.localPlayer.x - this.camera.x) * 0.08;
+    this.camera.y += (this.localPlayer.y - this.camera.y) * 0.08;
 
     const halfVisW = (this.canvas.width / 2) / this.currentZoom;
     const halfVisH = (this.canvas.height / 2) / this.currentZoom;
 
-    // Horizontal clamping
+    // Soft horizontal clamping
     if (this.worldWidth > halfVisW * 2) {
       this.camera.x = Math.max(halfVisW, Math.min(this.worldWidth - halfVisW, this.camera.x));
     } else {
       this.camera.x = this.worldWidth / 2;
     }
 
-    // Vertical clamping: ensure terrain remains properly grounded
-    const curGround = this.getGroundYAt(this.localPlayer.x);
-    const maxCamY = curGround + 80 - halfVisH;
+    // Soft vertical clamping: allows smooth aerial flight and ground centering with zero snapping jitter
+    const maxCamY = this.worldHeight + 200 - halfVisH;
     const minCamY = halfVisH;
     if (maxCamY > minCamY) {
       this.camera.y = Math.max(minCamY, Math.min(maxCamY, this.camera.y));
-    } else {
-      this.camera.y = Math.max(minCamY, curGround - halfVisH * 0.4);
     }
   }
 
