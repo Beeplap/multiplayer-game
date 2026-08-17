@@ -24,17 +24,17 @@ public:
     TacticalInventory tacticalGear;
     float shootCooldownTimer = 0.0f;
 
-    // Physics Constants (Realistic Jetpack Simulation & Normal Walking Pace)
-    static constexpr float GRAVITY = 0.13f;
-    static constexpr float JETPACK_THRUST = 0.27f; // Real thrust curve (counteracts 0.13g with gentle 0.14 lift)
-    static constexpr float GROUND_ACCEL = 0.35f;
-    static constexpr float GROUND_FRICTION = 0.72f;
-    static constexpr float AIR_ACCEL = 0.14f;
-    static constexpr float AIR_DRAG = 0.93f;
-    static constexpr float MAX_GROUND_SPEED = 1.9f;
-    static constexpr float MAX_AIR_SPEED = 2.2f;
-    static constexpr float MAX_VERTICAL_SPEED = 2.2f;
-    static constexpr float MAX_FALL_SPEED = 3.2f;
+    // Physics Constants (Balanced Responsive Tactical Pace & Agile Flight)
+    static constexpr float GRAVITY = 0.20f;
+    static constexpr float JETPACK_THRUST = 0.44f;
+    static constexpr float GROUND_ACCEL = 0.48f;
+    static constexpr float GROUND_FRICTION = 0.82f;
+    static constexpr float AIR_ACCEL = 0.28f;
+    static constexpr float AIR_DRAG = 0.90f;
+    static constexpr float MAX_GROUND_SPEED = 3.2f;
+    static constexpr float MAX_AIR_SPEED = 3.5f;
+    static constexpr float MAX_VERTICAL_SPEED = 3.6f;
+    static constexpr float MAX_FALL_SPEED = 4.2f;
     static constexpr float SOLDIER_RADIUS = 16.0f;
 
     void update(float moveX, float thrustY, float aimRad, float dt) {
@@ -57,7 +57,7 @@ public:
         if (thrustY < -0.2f) {
             float thrustMag = std::min(1.0f, std::abs(thrustY));
             velocity.y -= JETPACK_THRUST * thrustMag;
-            // Clamp upward max velocity (gentle climb rate)
+            // Clamp upward max velocity (responsive climb rate)
             velocity.y = std::max(-MAX_VERTICAL_SPEED, velocity.y);
             isFlying = true;
         } else {

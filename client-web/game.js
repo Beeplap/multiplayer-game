@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — Natural Warzone, Dynamic Gun Drops & Central Shelter House
+// 🎮 Mini Militia 2D — Seamless Natural Alpine Warzone & Articulated Combat Engine
 
 class MultiplayerGameApp {
   constructor() {
@@ -8,8 +8,8 @@ class MultiplayerGameApp {
     this.currentRoom = null;
     this.isHost = false;
 
-    // World & Camera
-    this.worldWidth = 3400;
+    // Wide Natural World & Smooth Tracking Camera
+    this.worldWidth = 3600;
     this.worldHeight = 1200;
     this.camera = { x: 0, y: 0 };
 
@@ -246,12 +246,10 @@ class MultiplayerGameApp {
       this.showScreen('lobby');
     });
 
-    // Press [F] to Equip Gun Button
     this.btnEquipPrompt.addEventListener('click', () => {
       this.equipNearbyGun();
     });
 
-    // Tactical Item Triggers
     document.getElementById('btn-throw-grenade').addEventListener('click', () => this.triggerGrenadeThrow());
     document.getElementById('btn-plant-mine').addEventListener('click', () => this.triggerMinePlant());
     document.getElementById('btn-throw-smoke').addEventListener('click', () => this.triggerSmokeDeploy());
@@ -299,7 +297,7 @@ class MultiplayerGameApp {
     this.blueCountEl.textContent = `${blueCount}/${maxPerTeam}`;
   }
 
-  // ──────────────── 2D NATURAL WARZONE SIMULATION ────────────────
+  // ──────────────── NATURAL WARZONE SIMULATION ────────────────
   initGameCanvas() {
     this.canvas = document.getElementById('game-canvas');
     this.ctx = this.canvas.getContext('2d');
@@ -309,7 +307,7 @@ class MultiplayerGameApp {
 
     this.localPlayer = {
       id: null,
-      x: 600,
+      x: 700,
       y: 900,
       vx: 0,
       vy: 0,
@@ -358,71 +356,61 @@ class MultiplayerGameApp {
   buildNaturalMap() {
     const gy = this.groundY;
 
-    // 1. Natural Grassy Ground Floor
+    // 1. Natural Grassy Ground Bedrock
     this.platforms = [
       { x: 0, y: gy, w: this.worldWidth, h: 120, type: 'GROUND' },
 
-      // 2. Natural Stony Rock Platforms & Ledges
+      // 2. Natural Stony Rock Cliffs & Organic Ledges
       { x: 280, y: 880, w: 280, h: 32, type: 'ROCK' },
-      { x: 420, y: 680, w: 220, h: 30, type: 'ROCK' },
+      { x: 440, y: 660, w: 240, h: 30, type: 'ROCK' },
       { x: 860, y: 780, w: 320, h: 34, type: 'ROCK' },
-      { x: 1050, y: 560, w: 240, h: 30, type: 'ROCK' },
+      { x: 1080, y: 540, w: 260, h: 30, type: 'ROCK' },
 
-      // 3. Central Outpost Shelter House (Left & Right Door Openings)
-      // Roof Slab:
-      { x: 1540, y: 840, w: 360, h: 36, type: 'HOUSE_ROOF' },
-      // Upper Left Wall (Door below it from Y=930 to Y=1080):
-      { x: 1540, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
-      // Upper Right Wall (Door below it from Y=930 to Y=1080):
-      { x: 1874, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
+      // 3. Central Outpost Stone Shelter House (Left & Right Entrances)
+      { x: 1600, y: 840, w: 400, h: 36, type: 'HOUSE_ROOF' },
+      { x: 1600, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
+      { x: 1974, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
 
-      // 4. Right Mountains & Rocky Cliffs
-      { x: 2120, y: 840, w: 260, h: 32, type: 'ROCK' },
-      { x: 2340, y: 640, w: 300, h: 34, type: 'ROCK' },
-      { x: 2750, y: 760, w: 340, h: 32, type: 'ROCK' },
-      { x: 2950, y: 520, w: 260, h: 30, type: 'ROCK' }
+      // 4. Right Mountain Cliffs & Rocky Outcrops
+      { x: 2200, y: 840, w: 280, h: 32, type: 'ROCK' },
+      { x: 2460, y: 640, w: 300, h: 34, type: 'ROCK' },
+      { x: 2880, y: 760, w: 340, h: 32, type: 'ROCK' },
+      { x: 3080, y: 520, w: 260, h: 30, type: 'ROCK' }
     ];
 
-    // 5. Tactical Auto-Pickup Crates (Grenades, Mines, Smoke, Medkits)
+    // 5. Tactical Auto-Pickup Crates (Auto-Collected on Contact)
     this.tacticalPickups = [
-      { id: 'pk_g1', type: 'GRENADE', x: 440, y: 640, label: '💣 FRAG GRENADES', available: true },
-      { id: 'pk_m1', type: 'MINE', x: 1120, y: 520, label: '⚡ PROXIMITY MINE', available: true },
-      { id: 'pk_s1', type: 'SMOKE', x: 2450, y: 600, label: '💨 SMOKE GRENADE', available: true },
-      { id: 'pk_hp1', type: 'MEDKIT', x: 2850, y: 720, label: '❤️ MEDICAL CASE', available: true }
+      { id: 'pk_g1', type: 'GRENADE', x: 460, y: 620, label: '💣 FRAG GRENADES', available: true },
+      { id: 'pk_m1', type: 'MINE', x: 1140, y: 500, label: '⚡ PROXIMITY MINE', available: true },
+      { id: 'pk_s1', type: 'SMOKE', x: 2520, y: 600, label: '💨 SMOKE GRENADE', available: true },
+      { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 720, label: '❤️ MEDICAL CASE', available: true }
     ];
 
-    // Central House Guaranteed Legendary Pedestal
-    this.centralHousePedestal = {
-      x: 1720,
-      y: 1040,
-      gun: {
+    // Central House Guaranteed Rarest Weapon Pedestal
+    this.groundGuns = [
+      {
         id: 'central_legendary',
         type: 'rpg',
         name: 'RPG ROCKET LAUNCHER',
         rarity: 'LEGENDARY',
-        x: 1720,
+        x: 1800,
         y: 1030,
         available: true
       }
-    };
-
-    this.groundGuns = [this.centralHousePedestal.gun];
+    ];
   }
 
-  // ──────────────── DYNAMIC RANDOM GUN SPAWNER & RARITY ────────────────
   startDynamicGunSpawner() {
     setInterval(() => {
       if (this.screens.game.classList.contains('active')) {
         this.spawnRandomGunDrop();
       }
-    }, 12000); // Check drop every 12s
+    }, 12000);
   }
 
   spawnRandomGunDrop() {
-    // Clean up old / expired weapons
     if (this.groundGuns.length >= 6) return;
 
-    // Rarity Weighted Roll
     const roll = Math.random();
     let gunType = 'uzi';
     let gunName = 'DUAL SMG UZI';
@@ -442,16 +430,15 @@ class MultiplayerGameApp {
       rarity = 'UNCOMMON';
     }
 
-    // Pick random natural rock platform
     const spawnSpots = [
       { x: 380, y: 840 },
-      { x: 500, y: 640 },
-      { x: 960, y: 740 },
-      { x: 1140, y: 520 },
-      { x: 2200, y: 800 },
-      { x: 2460, y: 600 },
-      { x: 2880, y: 720 },
-      { x: 3050, y: 480 }
+      { x: 520, y: 620 },
+      { x: 980, y: 740 },
+      { x: 1160, y: 500 },
+      { x: 2280, y: 800 },
+      { x: 2540, y: 600 },
+      { x: 2980, y: 720 },
+      { x: 3180, y: 480 }
     ];
 
     const spot = spawnSpots[Math.floor(Math.random() * spawnSpots.length)];
@@ -474,12 +461,10 @@ class MultiplayerGameApp {
       const key = e.key.toLowerCase();
       this.keys[key] = true;
 
-      // Press [F] to Equip Weapon
       if (key === 'f') {
         this.equipNearbyGun();
       }
 
-      // Tactical Keys
       if (key === 'g') this.triggerGrenadeThrow();
       if (key === 'm') this.triggerMinePlant();
       if (key === 'x') this.triggerSmokeDeploy();
@@ -567,7 +552,6 @@ class MultiplayerGameApp {
     bindJoystick(rightZone, rightThumb, this.touchJoyRight, true);
   }
 
-  // ──────────────── TACTICAL ITEMS ────────────────
   triggerGrenadeThrow() {
     const p = this.localPlayer;
     if (p.hp <= 0 || p.inventory.grenades <= 0) return;
@@ -651,7 +635,7 @@ class MultiplayerGameApp {
 
       this.addPickupNotification(`+EQUIPPED ${this.nearbyGun.name}`, '#00E5FF');
 
-      // Transform ground gun to old weapon
+      // Exchange ground weapon
       this.nearbyGun.type = oldWeapon;
       this.nearbyGun.name = names[oldWeapon] || 'WEAPON';
       this.nearbyGun.rarity = oldWeapon === 'rpg' ? 'LEGENDARY' : oldWeapon === 'sniper' ? 'RARE' : oldWeapon === 'shotgun' ? 'UNCOMMON' : 'COMMON';
@@ -666,7 +650,7 @@ class MultiplayerGameApp {
 
     this.localPlayer.id = this.myPlayerId;
     this.localPlayer.hp = 100;
-    this.localPlayer.x = 600 + Math.random() * 800;
+    this.localPlayer.x = 700 + Math.random() * 800;
     this.localPlayer.y = 900;
 
     this.localPlayer.inventory = { grenades: 2, mines: 1, smoke: 1 };
@@ -779,7 +763,7 @@ class MultiplayerGameApp {
 
   respawnLocalPlayer() {
     this.localPlayer.hp = 100;
-    this.localPlayer.x = 600 + Math.random() * 1200;
+    this.localPlayer.x = 700 + Math.random() * 1200;
     this.localPlayer.y = 800;
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
@@ -787,7 +771,7 @@ class MultiplayerGameApp {
     this.updateTacticalHUD();
   }
 
-  // ──────────────── SIMULATION & CAMERA SYSTEM ────────────────
+  // ──────────────── SIMULATION & SEAMLESS CAMERA ────────────────
   startRenderLoop() {
     let lastShootTime = 0;
 
@@ -826,14 +810,12 @@ class MultiplayerGameApp {
   }
 
   updateCamera() {
-    // Smooth Lerp Camera Centering on Local Player
     const targetX = this.localPlayer.x - this.canvas.width / 2;
     const targetY = this.localPlayer.y - this.canvas.height / 2;
 
     this.camera.x += (targetX - this.camera.x) * 0.12;
     this.camera.y += (targetY - this.camera.y) * 0.12;
 
-    // Clamp Camera within World Boundaries
     this.camera.x = Math.max(0, Math.min(this.worldWidth - this.canvas.width, this.camera.x));
     this.camera.y = Math.max(0, Math.min(this.worldHeight - this.canvas.height, this.camera.y));
   }
@@ -885,7 +867,6 @@ class MultiplayerGameApp {
     if (p.y - soldierRadius < 15) { p.y = 15 + soldierRadius; p.vy = 0; }
     if (p.y + soldierRadius > gy) { p.y = gy - soldierRadius; p.vy = 0; p.isGrounded = true; }
 
-    // Platform Collisions
     p.isGrounded = p.y + soldierRadius >= gy - 2;
     for (const plat of this.platforms) {
       if (
@@ -901,7 +882,6 @@ class MultiplayerGameApp {
       }
     }
 
-    // Aim Angle relative to Camera Space
     if (this.touchJoyRight.isAiming) {
       p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
     } else {
@@ -910,7 +890,6 @@ class MultiplayerGameApp {
       p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
-    // Remote Players Clamping & Interpolation
     this.remotePlayers.forEach(rp => {
       rp.targetX = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.targetX));
       rp.targetY = Math.max(soldierRadius + 15, Math.min(gy - soldierRadius, rp.targetY));
@@ -1037,7 +1016,7 @@ class MultiplayerGameApp {
       if (pt.alpha <= 0) this.particles.splice(i, 1);
     }
 
-    // ──────────────── AUTO-PICKUP FOR TACTICALS (BOMBS/SMOKE/MEDKIT) ────────────────
+    // Auto-Pickups
     for (const pk of this.tacticalPickups) {
       if (pk.available && Math.hypot(p.x - pk.x, p.y - pk.y) < 38) {
         pk.available = false;
@@ -1052,7 +1031,7 @@ class MultiplayerGameApp {
       }
     }
 
-    // ──────────────── MANUAL [F] PROMPT FOR GROUND GUNS ────────────────
+    // Manual [F] Gun Prompt
     this.nearbyGun = null;
     let closestDist = 52;
 
@@ -1073,7 +1052,6 @@ class MultiplayerGameApp {
       this.equipPromptBox.classList.add('hidden');
     }
 
-    // Floating Notifications
     for (let i = this.pickupNotifications.length - 1; i >= 0; i--) {
       const notif = this.pickupNotifications[i];
       notif.y -= 0.8;
@@ -1209,7 +1187,7 @@ class MultiplayerGameApp {
     });
   }
 
-  // ──────────────── RENDERING WITH SCROLLING CAMERA ────────────────
+  // ──────────────── SEAMLESS RENDERING PIPELINE ────────────────
   renderCanvas() {
     const ctx = this.ctx;
     const W = this.canvas.width;
@@ -1219,78 +1197,117 @@ class MultiplayerGameApp {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. Parallax Natural Warzone Background
+    // 1. SEAMLESS ASPECT-FILL PARALLAX BACKGROUND (ZERO STITCHING / ZERO SEAMS)
     if (this.assets.loaded && this.assets.bg.complete) {
+      const bg = this.assets.bg;
       const parallaxFactor = 0.35;
-      const bgX = -camX * parallaxFactor;
-      ctx.drawImage(this.assets.bg, bgX, 0, this.assets.bg.width * 1.6, H);
-      if (bgX + this.assets.bg.width * 1.6 < W) {
-        ctx.drawImage(this.assets.bg, bgX + this.assets.bg.width * 1.6, 0, this.assets.bg.width * 1.6, H);
-      }
+      
+      // Calculate continuous scale factor
+      const maxCamX = Math.max(1, this.worldWidth - W);
+      const maxCamY = Math.max(1, this.worldHeight - H);
+
+      // Scaled dimensions guaranteeing 100% viewport coverage with parallax span
+      const targetBgWidth = W + (this.worldWidth - W) * parallaxFactor;
+      const scale = Math.max(H / bg.height, targetBgWidth / bg.width);
+      const scaledW = bg.width * scale;
+      const scaledH = bg.height * scale;
+
+      const bgTravelX = scaledW - W;
+      const bgTravelY = scaledH - H;
+
+      const bgX = -(camX / maxCamX) * bgTravelX;
+      const bgY = -(camY / maxCamY) * bgTravelY;
+
+      // Draw single, continuous, seamless alpine background
+      ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
+
+      // Volumetric atmospheric horizon mist overlay
+      const mistGrad = ctx.createLinearGradient(0, H * 0.45, 0, H);
+      mistGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      mistGrad.addColorStop(0.6, 'rgba(180, 205, 215, 0.15)');
+      mistGrad.addColorStop(1, 'rgba(30, 45, 35, 0.4)');
+      ctx.fillStyle = mistGrad;
+      ctx.fillRect(0, 0, W, H);
     } else {
       ctx.fillStyle = '#1A2E20';
       ctx.fillRect(0, 0, W, H);
     }
 
-    // ──────────────── WORLD SPACE RENDERING ────────────────
+    // ──────────────── WORLD SPACE ────────────────
     ctx.save();
     ctx.translate(-camX, -camY);
 
-    // 2. Draw Natural Terrain Platforms & Central Shelter House
+    // 2. Draw Natural Terrain (3D Shaded Cliffs, Rocks, and Stone Shelter)
     for (const plat of this.platforms) {
       if (plat.type === 'GROUND') {
-        // Natural Grassy Soil Floor
-        ctx.fillStyle = '#3E2714'; // Rich Earth
+        // Natural Earth & Bedrock
+        ctx.fillStyle = '#2C1B10';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
 
-        // Lush Grass Surface Top Layer
-        ctx.fillStyle = '#4CAF50';
+        // Subsoil Layer
+        ctx.fillStyle = '#422A18';
+        ctx.fillRect(plat.x, plat.y, plat.w, 36);
+
+        // Lush Natural Grass Layer
+        ctx.fillStyle = '#388E3C';
         ctx.fillRect(plat.x, plat.y, plat.w, 14);
 
-        // Grassy blades detailing
-        ctx.fillStyle = '#81C784';
-        for (let x = 0; x < plat.w; x += 18) {
+        // 3D Grass Tufts & Wildflowers
+        ctx.fillStyle = '#66BB6A';
+        for (let x = 0; x < plat.w; x += 16) {
           ctx.beginPath();
           ctx.moveTo(x, plat.y);
-          ctx.lineTo(x + 5, plat.y - 6);
-          ctx.lineTo(x + 10, plat.y);
+          ctx.lineTo(x + 4, plat.y - 7);
+          ctx.lineTo(x + 9, plat.y);
           ctx.fill();
         }
       } else if (plat.type === 'ROCK') {
-        // Natural Stony Mountain Rock Ledge
+        // Multi-Facet 3D Natural Rock Ledge
         ctx.save();
-        ctx.fillStyle = '#455A64';
+        // Drop Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        ctx.fillRect(plat.x + 4, plat.y + plat.h, plat.w - 8, 12);
+
+        // Granite Body
+        ctx.fillStyle = '#37474F';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
 
-        // Rock Granular Shading
-        ctx.fillStyle = '#37474F';
-        ctx.fillRect(plat.x, plat.y + plat.h - 10, plat.w, 10);
+        // Rock Strata Shading
+        ctx.fillStyle = '#263238';
+        ctx.fillRect(plat.x, plat.y + plat.h - 12, plat.w, 12);
 
-        // Mossy Grass Top Layer
-        ctx.fillStyle = '#66BB6A';
+        // Mossy Overhang Top
+        ctx.fillStyle = '#4CAF50';
         ctx.fillRect(plat.x, plat.y, plat.w, 8);
 
-        ctx.strokeStyle = '#263238';
+        // Hanging Vines
+        ctx.fillStyle = '#2E7D32';
+        for (let x = plat.x + 20; x < plat.x + plat.w - 20; x += 35) {
+          ctx.fillRect(x, plat.y + 8, 4, 10 + (x % 7));
+        }
+
+        ctx.strokeStyle = '#1E272C';
         ctx.lineWidth = 2;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
         ctx.restore();
       } else if (plat.type === 'HOUSE_ROOF') {
-        // Central Shelter Rocky Roof Slab
+        // Natural Stone Shelter Roof Slab
         ctx.save();
-        ctx.fillStyle = '#37474F';
+        ctx.fillStyle = '#263238';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
+        // Moss & Turf Top
         ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(plat.x, plat.y, plat.w, 10); // Grass roof
+        ctx.fillRect(plat.x, plat.y, plat.w, 10);
         ctx.strokeStyle = '#FFD600';
         ctx.lineWidth = 2;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
         ctx.restore();
       } else if (plat.type === 'HOUSE_WALL') {
-        // Upper Shelter Wall (Open door below)
+        // Stone Masonry Shelter Wall
         ctx.save();
-        ctx.fillStyle = '#263238';
+        ctx.fillStyle = '#1E272C';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        ctx.strokeStyle = '#546E7A';
+        ctx.strokeStyle = '#455A64';
         ctx.lineWidth = 2;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
         ctx.restore();
@@ -1300,16 +1317,16 @@ class MultiplayerGameApp {
     // Draw Central Shelter Interior Aura & Sign
     ctx.save();
     ctx.fillStyle = 'rgba(255, 214, 0, 0.08)';
-    ctx.fillRect(1566, 876, 308, 204);
+    ctx.fillRect(1626, 876, 348, 204);
     ctx.font = 'bold 12px "Chakra Petch", sans-serif';
     ctx.fillStyle = '#FFD600';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 12;
     ctx.shadowColor = '#FFD600';
     ctx.textAlign = 'center';
-    ctx.fillText('🏛️ RAREST WEAPON VAULT', 1720, 910);
+    ctx.fillText('🏛️ RAREST WEAPON VAULT', 1800, 915);
     ctx.restore();
 
-    // 3. Draw Tactical Auto-Pickups (Frag Grenades, Mines, Smoke, Medkits)
+    // 3. Draw Tactical Auto-Pickups
     for (const pk of this.tacticalPickups) {
       if (pk.available) {
         this.drawTacticalPickup(ctx, pk);
@@ -1588,7 +1605,6 @@ class MultiplayerGameApp {
     const visorColor = p.team === 'BLUE' ? '#00E5FF' : '#FFD600';
     const equippedWep = isLocal ? this.currentWeapon : (p.weapon || 'uzi');
 
-    // Laser Sight Guide
     if (isLocal) {
       ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
       ctx.lineWidth = 1.2;
