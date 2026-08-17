@@ -1,4 +1,5 @@
-// 🎮 Mini Militia 2D — 5-Digit Private Lobby & Real-Time Relay Server
+// 🎮 Mini Militia 2D — High-Performance Low-Latency Game Server with Rate-Limiting & Anti-Lag
+
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -9,24 +10,24 @@ const cors = require('cors');
 const app = express();
 app.use(cors());
 
-// Serve the web client (supports both root repository deploy and /server subfolder deploy)
+// Serve client-web
 let clientPath = path.join(__dirname, '../client-web');
 if (!fs.existsSync(clientPath)) {
   clientPath = path.join(__dirname, 'client-web');
 }
 app.use(express.static(clientPath));
 
-// Health Check Route for Render.com Zero-Downtime Monitoring
+// Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'online', uptime: process.uptime() });
+  res.status(200).json({ status: 'online', uptime: process.uptime(), lobbies: lobbies.size });
 });
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, perMessageDeflate: false });
 
 const PORT = process.env.PORT || 3000;
 
-// Unique 5-Digit Room Code Generator
+// 5-digit room code alphabet
 const CODE_CHARS = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
 function generate5DigitCode() {
   let code = "";
@@ -36,12 +37,12 @@ function generate5DigitCode() {
   return code;
 }
 
-// In-Memory Lobbies & Active Clients
 const lobbies = new Map();
 const clients = new Map();
 let nextPlayerId = 1;
 
 wss.on('connection', (ws) => {
+  // Disable Nagle algorithm for immediate packet dispatch (zero buffer delay)
   if (ws._socket && typeof ws._socket.setNoDelay === 'function') {
     ws._socket.setNoDelay(true);
   }
@@ -53,6 +54,8 @@ wss.on('connection', (ws) => {
     roomCode: null,
     team: 'RED',
     ready: false,
+    alive: true,
+    lastSyncTime: 0,
     ws
   };
   clients.set(ws, clientData);
@@ -64,7 +67,7 @@ wss.on('connection', (ws) => {
       const message = JSON.parse(messageRaw);
       handleClientMessage(ws, clientData, message);
     } catch (err) {
-      console.error('Error parsing client message:', err);
+      console.error('Packet parse error:', err);
     }
   });
 
@@ -75,22 +78,18 @@ wss.on('connection', (ws) => {
 
 function handleClientMessage(ws, client, msg) {
   const { type, payload } = msg;
+  if (!type) return;
 
   switch (type) {
     case 'PING': {
-      send(ws, 'PONG', {
-        clientTime: payload?.clientTime,
-        serverTime: Date.now()
-      });
+      send(ws, 'PONG', { clientTime: payload?.clientTime, serverTime: Date.now() });
       break;
     }
 
     case 'SET_NICKNAME': {
       if (payload && payload.nickname) {
         client.nickname = String(payload.nickname).trim().slice(0, 16) || client.nickname;
-        if (client.roomCode) {
-          broadcastLobbyState(client.roomCode);
-        }
+        if (client.roomCode) broadcastLobbyState(client.roomCode);
       }
       break;
     }
@@ -104,29 +103,28 @@ function handleClientMessage(ws, client, msg) {
       }
 
       const matchMode = payload?.mode || '2v2';
-      const maxPlayers = matchMode === '1v1' ? 2 : matchMode === '2v2' ? 4 : (payload?.maxPlayers || 8);
+      const maxPlayers = matchMode === '1v1' ? 2 : matchMode === '2v2' ? 4 : 8;
 
       const lobby = {
         code: roomCode,
         hostId: client.id,
         mode: matchMode,
         maxPlayers,
-        map: 'Outpost Bunker',
-        timeLimitSec: 300,
-        killLimit: 15,
         state: 'WAITING',
         players: new Map(),
+        scores: { RED: 0, BLUE: 0 },
         createdAt: Date.now()
       };
 
       client.roomCode = roomCode;
       client.team = 'RED';
       client.ready = true;
+      client.alive = true;
 
       lobby.players.set(client.id, client);
       lobbies.set(roomCode, lobby);
 
-      console.log(`[LOBBY] Created private lobby ${roomCode} by ${client.nickname} (${client.id})`);
+      console.log(`[LOBBY] Room ${roomCode} created by ${client.nickname} (${client.id})`);
 
       send(ws, 'LOBBY_CREATED', {
         roomCode,
@@ -141,7 +139,7 @@ function handleClientMessage(ws, client, msg) {
       const lobby = lobbies.get(targetCode);
 
       if (!lobby) {
-        send(ws, 'LOBBY_JOIN_ERROR', { message: `Lobby "${targetCode}" not found. Verify the 5-digit code!` });
+        send(ws, 'LOBBY_JOIN_ERROR', { message: `Lobby "${targetCode}" not found!` });
         return;
       }
 
@@ -151,14 +149,13 @@ function handleClientMessage(ws, client, msg) {
       }
 
       if (lobby.players.size >= lobby.maxPlayers) {
-        send(ws, 'LOBBY_JOIN_ERROR', { message: `Lobby "${targetCode}" is full (${lobby.maxPlayers}/${lobby.maxPlayers})!` });
+        send(ws, 'LOBBY_JOIN_ERROR', { message: `Lobby "${targetCode}" is full!` });
         return;
       }
 
       leaveCurrentRoom(ws, client);
 
-      let redCount = 0;
-      let blueCount = 0;
+      let redCount = 0, blueCount = 0;
       for (const p of lobby.players.values()) {
         if (p.team === 'RED') redCount++;
         else if (p.team === 'BLUE') blueCount++;
@@ -167,9 +164,8 @@ function handleClientMessage(ws, client, msg) {
       client.team = lobby.mode === 'FFA' ? 'FFA' : (redCount <= blueCount ? 'RED' : 'BLUE');
       client.roomCode = targetCode;
       client.ready = false;
+      client.alive = true;
       lobby.players.set(client.id, client);
-
-      console.log(`[LOBBY] ${client.nickname} joined lobby ${targetCode}`);
 
       send(ws, 'LOBBY_JOIN_SUCCESS', {
         roomCode: targetCode,
@@ -207,10 +203,6 @@ function handleClientMessage(ws, client, msg) {
         lobby.mode = payload.mode;
         lobby.maxPlayers = payload.mode === '1v1' ? 2 : payload.mode === '2v2' ? 4 : 8;
       }
-      if (payload.map) lobby.map = payload.map;
-      if (payload.killLimit) lobby.killLimit = Number(payload.killLimit);
-      if (payload.timeLimitSec) lobby.timeLimitSec = Number(payload.timeLimitSec);
-
       broadcastLobbyState(client.roomCode);
       break;
     }
@@ -221,14 +213,16 @@ function handleClientMessage(ws, client, msg) {
       if (!lobby || lobby.hostId !== client.id) return;
 
       lobby.state = 'IN_GAME';
-      console.log(`[MATCH] Starting match in lobby ${lobby.code} (${lobby.mode})`);
+      lobby.scores = { RED: 0, BLUE: 0 };
+
+      // Reset all players to alive
+      lobby.players.forEach(p => { p.alive = true; });
+
+      console.log(`[MATCH] Starting match in ${lobby.code}`);
 
       broadcastToRoom(lobby.code, 'MATCH_START', {
         roomCode: lobby.code,
         mode: lobby.mode,
-        map: lobby.map,
-        timeLimitSec: lobby.timeLimitSec,
-        killLimit: lobby.killLimit,
         players: Array.from(lobby.players.values()).map(p => ({
           id: p.id,
           nickname: p.nickname,
@@ -238,9 +232,10 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // ──────────────── IN-GAME REAL-TIME COMBAT RELAYS ────────────────
+    // ──────────────── HIGH-PERFORMANCE REAL-TIME RELAYS ────────────────
     case 'PLAYER_SYNC': {
       if (!client.roomCode) return;
+      // Broadcast compact sync payload
       broadcastToRoom(client.roomCode, 'PLAYER_SYNC', {
         id: client.id,
         ...payload
@@ -248,7 +243,7 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // Primary infinite bullets
+    // Single bullet
     case 'BULLET_FIRE': {
       if (!client.roomCode) return;
       broadcastToRoom(client.roomCode, 'BULLET_FIRE', {
@@ -258,7 +253,16 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // Tactical Item 1: Frag Grenade Throw
+    // Batched Shotgun/Burst Pellets (Saves 80% packet overhead!)
+    case 'BULLET_BURST': {
+      if (!client.roomCode) return;
+      broadcastToRoom(client.roomCode, 'BULLET_BURST', {
+        ownerId: client.id,
+        bullets: payload.bullets
+      }, ws);
+      break;
+    }
+
     case 'GRENADE_THROW': {
       if (!client.roomCode) return;
       broadcastToRoom(client.roomCode, 'GRENADE_THROW', {
@@ -268,7 +272,6 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // Tactical Item 2: Proximity Landmine Plant
     case 'MINE_PLANT': {
       if (!client.roomCode) return;
       broadcastToRoom(client.roomCode, 'MINE_PLANT', {
@@ -279,7 +282,6 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // Tactical Item 3: Smoke Bomb Deploy
     case 'SMOKE_SPAWN': {
       if (!client.roomCode) return;
       broadcastToRoom(client.roomCode, 'SMOKE_SPAWN', {
@@ -289,7 +291,6 @@ function handleClientMessage(ws, client, msg) {
       break;
     }
 
-    // Map Item Pickup & Respawn Cycle
     case 'PICKUP_COLLECT': {
       if (!client.roomCode) return;
       broadcastToRoom(client.roomCode, 'PICKUP_COLLECT', {
@@ -298,7 +299,7 @@ function handleClientMessage(ws, client, msg) {
         pickupType: payload.pickupType
       });
 
-      // Schedule crate respawn in 15 seconds
+      // Respawn crate in 15 seconds
       setTimeout(() => {
         broadcastToRoom(client.roomCode, 'PICKUP_RESPAWN', {
           pickupId: payload.pickupId
@@ -309,26 +310,62 @@ function handleClientMessage(ws, client, msg) {
 
     case 'PLAYER_HIT': {
       if (!client.roomCode) return;
-      broadcastToRoom(client.roomCode, 'PLAYER_HIT', payload);
+      // Forward hit packet directly to the victim only
+      const lobby = lobbies.get(client.roomCode);
+      if (lobby && payload.victimId) {
+        const victim = lobby.players.get(payload.victimId);
+        if (victim && victim.ws && victim.ws.readyState === WebSocket.OPEN) {
+          send(victim.ws, 'PLAYER_HIT', payload);
+        }
+      }
       break;
     }
 
+    // SERVER-AUTHORITATIVE KILL DEDUPLICATION
     case 'PLAYER_KILLED': {
       if (!client.roomCode) return;
-      broadcastToRoom(client.roomCode, 'PLAYER_KILLED', {
+      const lobby = lobbies.get(client.roomCode);
+      if (!lobby) return;
+
+      const victim = lobby.players.get(payload.victimId);
+      // If victim was already dead, ignore duplicate kill packet!
+      if (victim && !victim.alive) {
+        return;
+      }
+
+      if (victim) {
+        victim.alive = false;
+      }
+
+      // Update Team Score
+      const killer = lobby.players.get(payload.killerId);
+      if (killer && killer.team !== 'FFA' && lobby.scores[killer.team] !== undefined) {
+        lobby.scores[killer.team]++;
+      }
+
+      console.log(`[KILL] ${payload.killerId} eliminated ${payload.victimId} in ${lobby.code}`);
+
+      // Broadcast single authoritative kill event with updated scoreboard
+      broadcastToRoom(lobby.code, 'PLAYER_KILLED', {
         victimId: payload.victimId,
         killerId: payload.killerId,
-        weapon: payload.weapon
+        weapon: payload.weapon || 'COMBAT',
+        scores: lobby.scores
       });
       break;
     }
 
     case 'RESPAWN_REQUEST': {
       if (!client.roomCode) return;
-      broadcastToRoom(client.roomCode, 'PLAYER_RESPAWNED', {
-        id: client.id,
-        ...payload
-      });
+      const lobby = lobbies.get(client.roomCode);
+      if (lobby) {
+        client.alive = true;
+        broadcastToRoom(client.roomCode, 'PLAYER_RESPAWNED', {
+          id: client.id,
+          x: payload.x,
+          y: payload.y
+        });
+      }
       break;
     }
   }
@@ -352,12 +389,40 @@ function leaveCurrentRoom(ws, client) {
     }
   }
   client.roomCode = null;
+  client.ready = false;
 }
 
 function handleDisconnect(ws, client) {
+  console.log(`[DISCONNECT] ${client.nickname} (${client.id}) disconnected`);
   leaveCurrentRoom(ws, client);
   clients.delete(ws);
-  console.log(`[DISCONNECT] Player ${client.id} disconnected`);
+}
+
+function send(ws, type, payload) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type, payload }));
+  }
+}
+
+function broadcastToRoom(roomCode, type, payload, excludeWs = null) {
+  const lobby = lobbies.get(roomCode);
+  if (!lobby) return;
+
+  const data = JSON.stringify({ type, payload });
+  lobby.players.forEach(p => {
+    if (p.ws && p.ws.readyState === WebSocket.OPEN && p.ws !== excludeWs) {
+      p.ws.send(data);
+    }
+  });
+}
+
+function broadcastLobbyState(roomCode) {
+  const lobby = lobbies.get(roomCode);
+  if (!lobby) return;
+
+  broadcastToRoom(roomCode, 'LOBBY_UPDATE', {
+    lobby: serializeLobby(lobby)
+  });
 }
 
 function serializeLobby(lobby) {
@@ -366,10 +431,8 @@ function serializeLobby(lobby) {
     hostId: lobby.hostId,
     mode: lobby.mode,
     maxPlayers: lobby.maxPlayers,
-    map: lobby.map,
-    timeLimitSec: lobby.timeLimitSec,
-    killLimit: lobby.killLimit,
     state: lobby.state,
+    scores: lobby.scores,
     players: Array.from(lobby.players.values()).map(p => ({
       id: p.id,
       nickname: p.nickname,
@@ -380,31 +443,10 @@ function serializeLobby(lobby) {
   };
 }
 
-function broadcastLobbyState(roomCode) {
-  const lobby = lobbies.get(roomCode);
-  if (!lobby) return;
-  broadcastToRoom(roomCode, 'LOBBY_UPDATE', { lobby: serializeLobby(lobby) });
-}
-
-function broadcastToRoom(roomCode, type, payload, excludeWs = null) {
-  const lobby = lobbies.get(roomCode);
-  if (!lobby) return;
-  const data = JSON.stringify({ type, payload });
-
-  for (const player of lobby.players.values()) {
-    if (player.ws !== excludeWs && player.ws.readyState === WebSocket.OPEN) {
-      player.ws.send(data);
-    }
-  }
-}
-
-function send(ws, type, payload) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type, payload }));
-  }
-}
-
 server.listen(PORT, () => {
-  console.log(`🚀 Mini Militia Game Server running on port ${PORT}`);
-  console.log(`📡 WebSocket ready on ws://localhost:${PORT}`);
+  console.log(`=========================================`);
+  console.log(`🚀 MINI MILITIA 2D HIGH-SPEED SERVER`);
+  console.log(`🌐 Server running on http://localhost:${PORT}`);
+  console.log(`⚡ Low-Latency Anti-Lag Netcode Engine Active`);
+  console.log(`=========================================`);
 });

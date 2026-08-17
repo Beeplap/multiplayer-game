@@ -1,4 +1,4 @@
-// 🎮 Mini Militia 2D — Seamless Natural Alpine Warzone & Articulated Combat Engine
+// 🎮 Mini Militia 2D — High-Performance Low-Latency Combat Client with Dead-Reckoning & Anti-Lag
 
 class MultiplayerGameApp {
   constructor() {
@@ -18,6 +18,7 @@ class MultiplayerGameApp {
     this.recoilOffset = 0;
     this.nearbyGun = null;
     this.pickupNotifications = [];
+    this.respawnTimer = 0;
 
     this.initDOM();
     this.loadAssets();
@@ -60,12 +61,6 @@ class MultiplayerGameApp {
     this.tacGrenadeCountEl = document.getElementById('tac-grenade-count');
     this.tacMineCountEl = document.getElementById('tac-mine-count');
     this.tacSmokeCountEl = document.getElementById('tac-smoke-count');
-
-    this.hudPingValEl = document.getElementById('hud-ping-val');
-    this.pingDotEl = document.getElementById('ping-dot');
-
-    this.currentPing = null;
-    this.pingInterval = null;
   }
 
   loadAssets() {
@@ -85,53 +80,19 @@ class MultiplayerGameApp {
     }
   }
 
-  // ──────────────── WEBSOCKET & NETWORKING ────────────────
-  formatServerWsUrl(rawUrl) {
-    let url = (rawUrl || '').trim();
-    if (!url || url.includes('localhost')) {
-      if (window.location.host && !window.location.host.includes('localhost') && window.location.protocol !== 'file:') {
-        const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        return `${proto}${window.location.host}`;
-      }
-      return 'wss://multiplayer-game-vq8m.onrender.com';
-    }
-
-    if (url.startsWith('https://')) {
-      url = url.replace(/^https:\/\//i, 'wss://');
-    } else if (url.startsWith('http://')) {
-      url = url.replace(/^http:\/\//i, 'ws://');
-    } else if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
-      url = 'wss://' + url;
-    }
-    return url.replace(/\/+$/, '');
-  }
-
+  // ──────────────── WEBSOCKET & LOW-LATENCY NETWORKING ────────────────
   initWebSocket() {
-    // Auto-populate default public server URL
-    if (!this.serverUrlInput.value || this.serverUrlInput.value.includes('localhost')) {
-      if (window.location.host && !window.location.host.includes('localhost') && window.location.protocol !== 'file:') {
-        const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        this.serverUrlInput.value = `${proto}${window.location.host}`;
-      } else {
-        this.serverUrlInput.value = 'wss://multiplayer-game-vq8m.onrender.com';
-      }
+    let wsUrl = this.serverUrlInput.value.trim();
+    if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+      wsUrl = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
     }
-
-    const wsUrl = this.formatServerWsUrl(this.serverUrlInput.value);
-    this.currentWsUrl = wsUrl;
 
     try {
-      if (this.ws) {
-        try { this.ws.close(); } catch (e) {}
-      }
-
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         console.log(' Connected to Game Server:', wsUrl);
-        const nickname = this.nicknameInput.value.trim() || 'Commander';
-        this.send('SET_NICKNAME', { nickname });
-        this.startPingLoop();
+        this.send('SET_NICKNAME', { nickname: this.nicknameInput.value });
       };
 
       this.ws.onmessage = (event) => {
@@ -139,97 +100,15 @@ class MultiplayerGameApp {
           const msg = JSON.parse(event.data);
           this.handleServerMessage(msg);
         } catch (e) {
-          console.error('Failed to parse server msg', e);
+          console.error('Packet parse error', e);
         }
       };
 
       this.ws.onclose = () => {
-        if (this.pingInterval) clearInterval(this.pingInterval);
-        setTimeout(() => {
-          if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-            this.initWebSocket();
-          }
-        }, 3000);
-      };
-
-      this.ws.onerror = (err) => {
-        console.warn('WebSocket connection error:', err);
+        setTimeout(() => this.initWebSocket(), 3000);
       };
     } catch (e) {
       console.error('WebSocket init error', e);
-    }
-  }
-
-  startPingLoop() {
-    if (this.pingInterval) clearInterval(this.pingInterval);
-    const sendPing = () => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        this.send('PING', { clientTime: performance.now() });
-      }
-    };
-    sendPing();
-    this.pingInterval = setInterval(sendPing, 1000);
-  }
-
-  handlePong(payload) {
-    if (payload && payload.clientTime !== undefined) {
-      const rtt = Math.max(1, Math.round(performance.now() - payload.clientTime));
-      if (this.currentPing === null) {
-        this.currentPing = rtt;
-      } else {
-        // Exponential Moving Average filter for smooth, accurate ping display
-        this.currentPing = Math.round(this.currentPing * 0.65 + rtt * 0.35);
-      }
-      this.updatePingHUD(this.currentPing);
-    }
-  }
-
-  updatePingHUD(ping) {
-    if (this.hudPingValEl) {
-      this.hudPingValEl.textContent = `${ping} ms`;
-    }
-    if (this.pingDotEl) {
-      this.pingDotEl.classList.remove('good', 'medium', 'bad');
-      if (ping < 70) {
-        this.pingDotEl.classList.add('good');
-      } else if (ping < 150) {
-        this.pingDotEl.classList.add('medium');
-      } else {
-        this.pingDotEl.classList.add('bad');
-      }
-    }
-  }
-
-  ensureConnectedToServer(callback) {
-    const wsUrl = this.formatServerWsUrl(this.serverUrlInput.value);
-    this.serverUrlInput.value = wsUrl;
-
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN || this.currentWsUrl !== wsUrl) {
-      this.currentWsUrl = wsUrl;
-      if (this.ws) {
-        try { this.ws.close(); } catch (e) {}
-      }
-      this.ws = new WebSocket(wsUrl);
-      this.ws.onopen = () => {
-        console.log(' Connected to Game Server:', wsUrl);
-        const nickname = this.nicknameInput.value.trim() || 'Commander';
-        this.send('SET_NICKNAME', { nickname });
-        this.startPingLoop();
-        if (callback) callback();
-      };
-      this.ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          this.handleServerMessage(msg);
-        } catch (e) {
-          console.error('Failed to parse server msg', e);
-        }
-      };
-      this.ws.onclose = () => {
-        if (this.pingInterval) clearInterval(this.pingInterval);
-      };
-    } else {
-      if (callback) callback();
     }
   }
 
@@ -243,10 +122,6 @@ class MultiplayerGameApp {
     const { type, payload } = msg;
 
     switch (type) {
-      case 'PONG':
-        this.handlePong(payload);
-        break;
-
       case 'CONNECTED':
         this.myPlayerId = payload.playerId;
         break;
@@ -283,6 +158,10 @@ class MultiplayerGameApp {
         this.handleRemoteBullet(payload);
         break;
 
+      case 'BULLET_BURST':
+        this.handleRemoteBulletBurst(payload);
+        break;
+
       case 'GRENADE_THROW':
         this.handleRemoteGrenade(payload);
         break;
@@ -310,17 +189,19 @@ class MultiplayerGameApp {
       case 'PLAYER_KILLED':
         this.handleRemoteKill(payload);
         break;
+
+      case 'PLAYER_RESPAWNED':
+        this.handleRemoteRespawn(payload);
+        break;
     }
   }
 
   // ──────────────── LOBBY MANAGEMENT ────────────────
   setupEventListeners() {
     document.getElementById('btn-create-lobby').addEventListener('click', () => {
-      this.ensureConnectedToServer(() => {
-        const nickname = this.nicknameInput.value.trim() || 'Commander';
-        this.send('SET_NICKNAME', { nickname });
-        this.send('CREATE_LOBBY', { mode: '2v2' });
-      });
+      const nickname = this.nicknameInput.value.trim() || 'Commander';
+      this.send('SET_NICKNAME', { nickname });
+      this.send('CREATE_LOBBY', { mode: '2v2' });
     });
 
     document.getElementById('btn-join-lobby').addEventListener('click', () => {
@@ -329,11 +210,9 @@ class MultiplayerGameApp {
         alert('Please enter a valid 5-digit room code!');
         return;
       }
-      this.ensureConnectedToServer(() => {
-        const nickname = this.nicknameInput.value.trim() || 'Commander';
-        this.send('SET_NICKNAME', { nickname });
-        this.send('JOIN_LOBBY', { roomCode: code });
-      });
+      const nickname = this.nicknameInput.value.trim() || 'Commander';
+      this.send('SET_NICKNAME', { nickname });
+      this.send('JOIN_LOBBY', { roomCode: code });
     });
 
     document.getElementById('btn-copy-code').addEventListener('click', () => {
@@ -383,7 +262,7 @@ class MultiplayerGameApp {
       this.showScreen('lobby');
     });
 
-    // Fullscreen Toggle Handler
+    // Fullscreen Toggle
     const toggleFullscreen = () => {
       const el = document.documentElement;
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -397,7 +276,7 @@ class MultiplayerGameApp {
     const fsBtn = document.getElementById('btn-fullscreen-toggle');
     if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen);
 
-    // Instant Mobile Touch Support for Action & Tactical Buttons (No 300ms delay)
+    // Instant Mobile Touch Actions
     const bindTouchAction = (id, callback) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -469,6 +348,7 @@ class MultiplayerGameApp {
       vy: 0,
       aimAngle: 0,
       hp: 100,
+      isDead: false,
       team: 'RED',
       color: '#FF3366',
       isFlying: false,
@@ -512,29 +392,21 @@ class MultiplayerGameApp {
   buildNaturalMap() {
     const gy = this.groundY;
 
-    // 1. Natural Grassy Ground Bedrock
     this.platforms = [
       { x: 0, y: gy, w: this.worldWidth, h: 120, type: 'GROUND' },
-
-      // 2. Natural Stony Rock Cliffs & Organic Ledges
       { x: 280, y: 880, w: 280, h: 32, type: 'ROCK' },
       { x: 440, y: 660, w: 240, h: 30, type: 'ROCK' },
       { x: 860, y: 780, w: 320, h: 34, type: 'ROCK' },
       { x: 1080, y: 540, w: 260, h: 30, type: 'ROCK' },
-
-      // 3. Central Outpost Stone Shelter House (Left & Right Entrances)
       { x: 1600, y: 840, w: 400, h: 36, type: 'HOUSE_ROOF' },
       { x: 1600, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
       { x: 1974, y: 876, w: 26, h: 64, type: 'HOUSE_WALL' },
-
-      // 4. Right Mountain Cliffs & Rocky Outcrops
       { x: 2200, y: 840, w: 280, h: 32, type: 'ROCK' },
       { x: 2460, y: 640, w: 300, h: 34, type: 'ROCK' },
       { x: 2880, y: 760, w: 340, h: 32, type: 'ROCK' },
       { x: 3080, y: 520, w: 260, h: 30, type: 'ROCK' }
     ];
 
-    // 5. Tactical Auto-Pickup Crates (Auto-Collected on Contact)
     this.tacticalPickups = [
       { id: 'pk_g1', type: 'GRENADE', x: 460, y: 620, label: '💣 FRAG GRENADES', available: true },
       { id: 'pk_m1', type: 'MINE', x: 1140, y: 500, label: '⚡ PROXIMITY MINE', available: true },
@@ -542,7 +414,6 @@ class MultiplayerGameApp {
       { id: 'pk_hp1', type: 'MEDKIT', x: 2980, y: 720, label: '❤️ MEDICAL CASE', available: true }
     ];
 
-    // Central House Guaranteed Rarest Weapon Pedestal
     this.groundGuns = [
       {
         id: 'central_legendary',
@@ -617,10 +488,7 @@ class MultiplayerGameApp {
       const key = e.key.toLowerCase();
       this.keys[key] = true;
 
-      if (key === 'f') {
-        this.equipNearbyGun();
-      }
-
+      if (key === 'f') this.equipNearbyGun();
       if (key === 'g') this.triggerGrenadeThrow();
       if (key === 'm') this.triggerMinePlant();
       if (key === 'x') this.triggerSmokeDeploy();
@@ -680,7 +548,7 @@ class MultiplayerGameApp {
             joyObj.vx = thumbX / maxRadius;
             joyObj.vy = thumbY / maxRadius;
 
-            if (isRight && dist > 15) {
+            if (isRight && dist > 14) {
               joyObj.isAiming = true;
             }
           }
@@ -710,7 +578,7 @@ class MultiplayerGameApp {
 
   triggerGrenadeThrow() {
     const p = this.localPlayer;
-    if (p.hp <= 0 || p.inventory.grenades <= 0) return;
+    if (p.isDead || p.hp <= 0 || p.inventory.grenades <= 0) return;
 
     p.inventory.grenades--;
     this.updateTacticalHUD();
@@ -719,10 +587,10 @@ class MultiplayerGameApp {
     const grenade = {
       id: `g_${Date.now()}_${Math.random()}`,
       ownerId: this.myPlayerId,
-      x: p.x + Math.cos(p.aimAngle) * 28,
-      y: p.y + Math.sin(p.aimAngle) * 28,
-      vx: Math.cos(p.aimAngle) * speed,
-      vy: Math.sin(p.aimAngle) * speed - 4.0,
+      x: Math.round(p.x + Math.cos(p.aimAngle) * 28),
+      y: Math.round(p.y + Math.sin(p.aimAngle) * 28),
+      vx: Math.round(Math.cos(p.aimAngle) * speed * 10) / 10,
+      vy: Math.round((Math.sin(p.aimAngle) * speed - 4.0) * 10) / 10,
       fuse: 100
     };
 
@@ -732,7 +600,7 @@ class MultiplayerGameApp {
 
   triggerMinePlant() {
     const p = this.localPlayer;
-    if (p.hp <= 0 || p.inventory.mines <= 0) return;
+    if (p.isDead || p.hp <= 0 || p.inventory.mines <= 0) return;
 
     p.inventory.mines--;
     this.updateTacticalHUD();
@@ -741,8 +609,8 @@ class MultiplayerGameApp {
       id: `m_${Date.now()}_${Math.random()}`,
       ownerId: this.myPlayerId,
       team: p.team,
-      x: p.x,
-      y: p.y + 18,
+      x: Math.round(p.x),
+      y: Math.round(p.y + 18),
       armed: false,
       armTimer: 60
     };
@@ -753,15 +621,15 @@ class MultiplayerGameApp {
 
   triggerSmokeDeploy() {
     const p = this.localPlayer;
-    if (p.hp <= 0 || p.inventory.smoke <= 0) return;
+    if (p.isDead || p.hp <= 0 || p.inventory.smoke <= 0) return;
 
     p.inventory.smoke--;
     this.updateTacticalHUD();
 
     const smoke = {
       id: `s_${Date.now()}_${Math.random()}`,
-      x: p.x + Math.cos(p.aimAngle) * 60,
-      y: p.y + Math.sin(p.aimAngle) * 60,
+      x: Math.round(p.x + Math.cos(p.aimAngle) * 60),
+      y: Math.round(p.y + Math.sin(p.aimAngle) * 60),
       radius: 80,
       life: 450
     };
@@ -777,7 +645,7 @@ class MultiplayerGameApp {
   }
 
   equipNearbyGun() {
-    if (this.nearbyGun && this.nearbyGun.available) {
+    if (this.nearbyGun && this.nearbyGun.available && !this.localPlayer.isDead) {
       const oldWeapon = this.currentWeapon;
       this.currentWeapon = this.nearbyGun.type;
 
@@ -806,8 +674,11 @@ class MultiplayerGameApp {
 
     this.localPlayer.id = this.myPlayerId;
     this.localPlayer.hp = 100;
+    this.localPlayer.isDead = false;
     this.localPlayer.x = 700 + Math.random() * 800;
     this.localPlayer.y = 900;
+    this.localPlayer.vx = 0;
+    this.localPlayer.vy = 0;
 
     this.localPlayer.inventory = { grenades: 2, mines: 1, smoke: 1 };
     this.updateTacticalHUD();
@@ -816,46 +687,52 @@ class MultiplayerGameApp {
     this.localPlayer.team = meInRoom?.team || 'RED';
     this.localPlayer.color = this.localPlayer.team === 'BLUE' ? '#00A2FF' : '#FF3366';
 
+    // 20Hz Compact Delta Sync (Every 50ms - Smooth & Lightweight on slow networks)
     if (this.syncInterval) clearInterval(this.syncInterval);
     this.syncInterval = setInterval(() => {
-      this.send('PLAYER_SYNC', {
-        x: Math.round(this.localPlayer.x),
-        y: Math.round(this.localPlayer.y),
-        vx: Math.round(this.localPlayer.vx * 10) / 10,
-        vy: Math.round(this.localPlayer.vy * 10) / 10,
-        aimAngle: this.localPlayer.aimAngle,
-        isFlying: this.localPlayer.isFlying,
-        hp: this.localPlayer.hp,
-        team: this.localPlayer.team,
-        weapon: this.currentWeapon
-      });
-    }, 33);
+      if (this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
+        this.send('PLAYER_SYNC', {
+          x: Math.round(this.localPlayer.x),
+          y: Math.round(this.localPlayer.y),
+          vx: Math.round(this.localPlayer.vx * 10) / 10,
+          vy: Math.round(this.localPlayer.vy * 10) / 10,
+          aim: Math.round(this.localPlayer.aimAngle * 100) / 100,
+          fly: this.localPlayer.isFlying ? 1 : 0,
+          hp: Math.round(this.localPlayer.hp),
+          wep: this.currentWeapon
+        });
+      }
+    }, 50);
   }
 
+  // ──────────────── DEAD-RECKONING REMOTE INTERPOLATION ────────────────
   handleRemotePlayerSync(data) {
     if (!this.remotePlayers.has(data.id)) {
       this.remotePlayers.set(data.id, {
         id: data.id,
         x: data.x,
         y: data.y,
-        vx: data.vx,
-        vy: data.vy,
-        aimAngle: data.aimAngle,
-        hp: data.hp,
-        team: data.team,
-        weapon: data.weapon || 'uzi',
+        vx: data.vx || 0,
+        vy: data.vy || 0,
+        aimAngle: data.aim || 0,
+        hp: data.hp !== undefined ? data.hp : 100,
+        team: data.team || 'RED',
+        weapon: data.wep || 'uzi',
         color: data.team === 'BLUE' ? '#00A2FF' : '#FF3366',
         targetX: data.x,
         targetY: data.y,
+        isDead: false,
         walkCycle: 0
       });
     } else {
       const p = this.remotePlayers.get(data.id);
       p.targetX = data.x;
       p.targetY = data.y;
-      p.aimAngle = data.aimAngle;
-      p.hp = data.hp;
-      p.weapon = data.weapon || p.weapon;
+      p.vx = data.vx || 0;
+      p.vy = data.vy || 0;
+      p.aimAngle = data.aim !== undefined ? data.aim : p.aimAngle;
+      p.hp = data.hp !== undefined ? data.hp : p.hp;
+      p.weapon = data.wep || p.weapon;
       if (Math.abs(data.vx) > 0.5) p.walkCycle = (p.walkCycle || 0) + 0.2;
     }
   }
@@ -871,6 +748,22 @@ class MultiplayerGameApp {
       color: bullet.color || '#FFD600',
       life: 0
     });
+  }
+
+  handleRemoteBulletBurst(data) {
+    if (!data.bullets || !Array.isArray(data.bullets)) return;
+    for (const b of data.bullets) {
+      this.bullets.push({
+        x: b.x,
+        y: b.y,
+        vx: b.vx,
+        vy: b.vy,
+        weapon: 'shotgun',
+        ownerId: data.ownerId,
+        color: '#FF7B00',
+        life: 0
+      });
+    }
   }
 
   handleRemoteGrenade(grenade) {
@@ -896,20 +789,27 @@ class MultiplayerGameApp {
   }
 
   handleRemoteHit(data) {
-    if (data.victimId === this.myPlayerId) {
+    if (data.victimId === this.myPlayerId && !this.localPlayer.isDead) {
       this.localPlayer.hp = Math.max(0, this.localPlayer.hp - data.damage);
       if (this.localPlayer.hp <= 0) {
-        this.send('PLAYER_KILLED', {
-          victimId: this.myPlayerId,
-          killerId: data.killerId,
-          weapon: 'COMBAT'
-        });
-        setTimeout(() => this.respawnLocalPlayer(), 3000);
+        this.triggerLocalDeath(data.killerId, 'COMBAT');
       }
     }
   }
 
   handleRemoteKill(data) {
+    if (data.scores) {
+      if (this.scoreRedEl) this.scoreRedEl.textContent = data.scores.RED || 0;
+      if (this.scoreBlueEl) this.scoreBlueEl.textContent = data.scores.BLUE || 0;
+    }
+
+    // Mark remote player dead
+    const rp = this.remotePlayers.get(data.victimId);
+    if (rp) {
+      rp.isDead = true;
+      rp.hp = 0;
+    }
+
     const msg = document.createElement('div');
     msg.className = 'kill-msg';
     msg.textContent = `💥 ${data.killerId} eliminated ${data.victimId}`;
@@ -917,14 +817,70 @@ class MultiplayerGameApp {
     setTimeout(() => msg.remove(), 4000);
   }
 
+  handleRemoteRespawn(data) {
+    const rp = this.remotePlayers.get(data.id);
+    if (rp) {
+      rp.isDead = false;
+      rp.hp = 100;
+      rp.x = data.x;
+      rp.y = data.y;
+      rp.targetX = data.x;
+      rp.targetY = data.y;
+    }
+  }
+
+  triggerLocalDeath(killerId, weapon) {
+    if (this.localPlayer.isDead) return;
+    this.localPlayer.isDead = true;
+    this.localPlayer.hp = 0;
+
+    // Trigger local death explosion
+    for (let i = 0; i < 24; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 3 + Math.random() * 8;
+      this.particles.push({
+        x: this.localPlayer.x,
+        y: this.localPlayer.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: '#FF3366',
+        alpha: 1.0,
+        radius: 4 + Math.random() * 4
+      });
+    }
+
+    // Send single death notification to server
+    this.send('PLAYER_KILLED', {
+      victimId: this.myPlayerId,
+      killerId,
+      weapon
+    });
+
+    // Start 3-second respawn timer
+    this.respawnTimer = 3;
+    const countdown = setInterval(() => {
+      this.respawnTimer--;
+      if (this.respawnTimer <= 0) {
+        clearInterval(countdown);
+        this.respawnLocalPlayer();
+      }
+    }, 1000);
+  }
+
   respawnLocalPlayer() {
     this.localPlayer.hp = 100;
+    this.localPlayer.isDead = false;
     this.localPlayer.x = 700 + Math.random() * 1200;
     this.localPlayer.y = 800;
     this.localPlayer.vx = 0;
     this.localPlayer.vy = 0;
     this.localPlayer.inventory = { grenades: 2, mines: 1, smoke: 1 };
     this.updateTacticalHUD();
+
+    this.send('RESPAWN_REQUEST', {
+      x: Math.round(this.localPlayer.x),
+      y: Math.round(this.localPlayer.y)
+    });
   }
 
   // ──────────────── SIMULATION & SEAMLESS CAMERA ────────────────
@@ -947,7 +903,7 @@ class MultiplayerGameApp {
         const shouldShoot = this.mouse.isDown || this.touchJoyRight.isAiming;
         const cooldown = fireDelays[this.currentWeapon] || 110;
 
-        if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0) {
+        if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
           lastShootTime = now;
           this.recoilOffset = 8.0;
           this.fireWeapon();
@@ -969,7 +925,7 @@ class MultiplayerGameApp {
     const targetX = this.localPlayer.x - this.canvas.width / 2;
     const targetY = this.localPlayer.y - this.canvas.height / 2;
 
-    // Smooth, cinematic camera tracking (no jerky sudden movements)
+    // Smooth, cinematic camera tracking
     this.camera.x += (targetX - this.camera.x) * 0.08;
     this.camera.y += (targetY - this.camera.y) * 0.08;
 
@@ -979,7 +935,7 @@ class MultiplayerGameApp {
 
   updatePhysics() {
     const p = this.localPlayer;
-    if (p.hp <= 0) return;
+    if (p.isDead || p.hp <= 0) return;
 
     let moveX = 0;
     let thrustY = 0;
@@ -990,7 +946,7 @@ class MultiplayerGameApp {
 
     if (this.touchJoyLeft.active) {
       moveX = this.touchJoyLeft.vx;
-      if (this.touchJoyLeft.vy < -0.2) thrustY = this.touchJoyLeft.vy;
+      if (this.touchJoyLeft.vy < -0.15) thrustY = this.touchJoyLeft.vy;
     }
 
     p.vx += moveX * 0.85;
@@ -1047,11 +1003,16 @@ class MultiplayerGameApp {
       p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     }
 
+    // Dead-Reckoning Extrapolation for Remote Players
     this.remotePlayers.forEach(rp => {
-      rp.targetX = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.targetX));
-      rp.targetY = Math.max(soldierRadius + 15, Math.min(gy - soldierRadius, rp.targetY));
-      rp.x += (rp.targetX - rp.x) * 0.25;
-      rp.y += (rp.targetY - rp.y) * 0.25;
+      if (!rp.isDead) {
+        rp.targetX += rp.vx * 0.5;
+        rp.targetY += rp.vy * 0.5;
+        rp.targetX = Math.max(soldierRadius + 10, Math.min(this.worldWidth - soldierRadius - 10, rp.targetX));
+        rp.targetY = Math.max(soldierRadius + 15, Math.min(gy - soldierRadius, rp.targetY));
+        rp.x += (rp.targetX - rp.x) * 0.28;
+        rp.y += (rp.targetY - rp.y) * 0.28;
+      }
     });
 
     // ──────────────── BULLET & PLATFORM COLLISION ────────────────
@@ -1081,7 +1042,8 @@ class MultiplayerGameApp {
         continue;
       }
 
-      if (b.ownerId !== this.myPlayerId && p.hp > 0) {
+      // Hit on Local Player
+      if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
         if (Math.hypot(b.x - p.x, b.y - p.y) < soldierRadius + 4) {
           const dmg = b.weapon === 'sniper' ? 70 : b.weapon === 'shotgun' ? 14 : b.weapon === 'rpg' ? 90 : 18;
           this.spawnImpactSparks(b.x, b.y, '#FF3366');
@@ -1090,10 +1052,8 @@ class MultiplayerGameApp {
             this.createExplosion(b.x, b.y, 95, 95, b.ownerId);
           } else {
             p.hp = Math.max(0, p.hp - dmg);
-            this.send('PLAYER_HIT', { victimId: this.myPlayerId, killerId: b.ownerId, damage: dmg });
             if (p.hp <= 0) {
-              this.send('PLAYER_KILLED', { victimId: this.myPlayerId, killerId: b.ownerId, weapon: b.weapon });
-              setTimeout(() => this.respawnLocalPlayer(), 3000);
+              this.triggerLocalDeath(b.ownerId, b.weapon);
             }
           }
 
@@ -1107,7 +1067,7 @@ class MultiplayerGameApp {
       }
     }
 
-    // Grenades Update & Platform Bounce
+    // Grenades
     for (let i = this.grenades.length - 1; i >= 0; i--) {
       const g = this.grenades[i];
       g.vy += 0.42;
@@ -1150,7 +1110,7 @@ class MultiplayerGameApp {
         m.armTimer--;
         if (m.armTimer <= 0) m.armed = true;
       } else {
-        if (m.team !== p.team && p.hp > 0 && Math.hypot(m.x - p.x, m.y - p.y) < 45) {
+        if (m.team !== p.team && p.hp > 0 && !p.isDead && Math.hypot(m.x - p.x, m.y - p.y) < 45) {
           this.createExplosion(m.x, m.y, 90, 100, m.ownerId);
           this.landmines.splice(i, 1);
         }
@@ -1175,7 +1135,7 @@ class MultiplayerGameApp {
 
     // Auto-Pickups
     for (const pk of this.tacticalPickups) {
-      if (pk.available && Math.hypot(p.x - pk.x, p.y - pk.y) < 38) {
+      if (pk.available && !p.isDead && Math.hypot(p.x - pk.x, p.y - pk.y) < 38) {
         pk.available = false;
 
         if (pk.type === 'GRENADE') { p.inventory.grenades = Math.min(4, p.inventory.grenades + 2); this.addPickupNotification('+2 FRAG GRENADES', '#00E676'); }
@@ -1193,7 +1153,7 @@ class MultiplayerGameApp {
     let closestDist = 52;
 
     for (const gun of this.groundGuns) {
-      if (gun.available) {
+      if (gun.available && !p.isDead) {
         const dist = Math.hypot(p.x - gun.x, p.y - gun.y);
         if (dist < closestDist) {
           closestDist = dist;
@@ -1243,13 +1203,11 @@ class MultiplayerGameApp {
 
     const p = this.localPlayer;
     const dist = Math.hypot(p.x - x, p.y - y);
-    if (dist <= radius && p.hp > 0) {
+    if (dist <= radius && p.hp > 0 && !p.isDead) {
       const dmg = Math.round(maxDamage * (1 - dist / radius));
       p.hp = Math.max(0, p.hp - dmg);
-      this.send('PLAYER_HIT', { victimId: this.myPlayerId, killerId: attackerId, damage: dmg });
       if (p.hp <= 0) {
-        this.send('PLAYER_KILLED', { victimId: this.myPlayerId, killerId: attackerId, weapon: 'EXPLOSIVE' });
-        setTimeout(() => this.respawnLocalPlayer(), 3000);
+        this.triggerLocalDeath(attackerId, 'EXPLOSIVE');
       }
     }
   }
@@ -1269,16 +1227,17 @@ class MultiplayerGameApp {
     }
   }
 
+  // ──────────────── BATCHED LOW-BANDWIDTH WEAPON FIRING ────────────────
   fireWeapon() {
     const p = this.localPlayer;
     const wep = this.currentWeapon;
 
     if (wep === 'uzi') {
       const bullet = {
-        x: p.x + Math.cos(p.aimAngle) * 26,
-        y: p.y + Math.sin(p.aimAngle) * 26,
-        vx: Math.cos(p.aimAngle) * 18,
-        vy: Math.sin(p.aimAngle) * 18,
+        x: Math.round(p.x + Math.cos(p.aimAngle) * 26),
+        y: Math.round(p.y + Math.sin(p.aimAngle) * 26),
+        vx: Math.round(Math.cos(p.aimAngle) * 18 * 10) / 10,
+        vy: Math.round(Math.sin(p.aimAngle) * 18 * 10) / 10,
         weapon: 'uzi',
         ownerId: this.myPlayerId,
         color: '#00E5FF'
@@ -1286,28 +1245,28 @@ class MultiplayerGameApp {
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
     } else if (wep === 'shotgun') {
+      // Send single batched array packet for all 6 pellets
+      const burst = [];
       for (let i = 0; i < 6; i++) {
         const spread = (Math.random() - 0.5) * 0.35;
         const angle = p.aimAngle + spread;
         const speed = 15 + Math.random() * 3;
-        const bullet = {
-          x: p.x + Math.cos(angle) * 26,
-          y: p.y + Math.sin(angle) * 26,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          weapon: 'shotgun',
-          ownerId: this.myPlayerId,
-          color: '#FF7B00'
+        const pellet = {
+          x: Math.round(p.x + Math.cos(angle) * 26),
+          y: Math.round(p.y + Math.sin(angle) * 26),
+          vx: Math.round(Math.cos(angle) * speed * 10) / 10,
+          vy: Math.round(Math.sin(angle) * speed * 10) / 10
         };
-        this.bullets.push(bullet);
-        this.send('BULLET_FIRE', bullet);
+        this.bullets.push({ ...pellet, weapon: 'shotgun', ownerId: this.myPlayerId, color: '#FF7B00', life: 0 });
+        burst.push(pellet);
       }
+      this.send('BULLET_BURST', { bullets: burst });
     } else if (wep === 'sniper') {
       const bullet = {
-        x: p.x + Math.cos(p.aimAngle) * 32,
-        y: p.y + Math.sin(p.aimAngle) * 32,
-        vx: Math.cos(p.aimAngle) * 28,
-        vy: Math.sin(p.aimAngle) * 28,
+        x: Math.round(p.x + Math.cos(p.aimAngle) * 32),
+        y: Math.round(p.y + Math.sin(p.aimAngle) * 32),
+        vx: Math.round(Math.cos(p.aimAngle) * 28 * 10) / 10,
+        vy: Math.round(Math.sin(p.aimAngle) * 28 * 10) / 10,
         weapon: 'sniper',
         ownerId: this.myPlayerId,
         color: '#00FF66'
@@ -1316,10 +1275,10 @@ class MultiplayerGameApp {
       this.send('BULLET_FIRE', bullet);
     } else if (wep === 'rpg') {
       const rocket = {
-        x: p.x + Math.cos(p.aimAngle) * 30,
-        y: p.y + Math.sin(p.aimAngle) * 30,
-        vx: Math.cos(p.aimAngle) * 12,
-        vy: Math.sin(p.aimAngle) * 12,
+        x: Math.round(p.x + Math.cos(p.aimAngle) * 30),
+        y: Math.round(p.y + Math.sin(p.aimAngle) * 30),
+        vx: Math.round(Math.cos(p.aimAngle) * 12 * 10) / 10,
+        vy: Math.round(Math.sin(p.aimAngle) * 12 * 10) / 10,
         weapon: 'rpg',
         ownerId: this.myPlayerId,
         color: '#FF3366'
@@ -1344,7 +1303,7 @@ class MultiplayerGameApp {
     });
   }
 
-  // ──────────────── SEAMLESS RENDERING PIPELINE ────────────────
+  // ──────────────── RENDERING ────────────────
   renderCanvas() {
     const ctx = this.ctx;
     const W = this.canvas.width;
@@ -1354,24 +1313,21 @@ class MultiplayerGameApp {
 
     ctx.clearRect(0, 0, W, H);
 
-    // 1. STABLE & CALM DISTANT MOUNTAIN BACKDROP (ZERO MOTION SICKNESS / ZERO SEAMS)
+    // 1. Stable Distant Mountain Backdrop
     if (this.assets.loaded && this.assets.bg.complete) {
       const bg = this.assets.bg;
 
-      // Fill viewport with extra margin for ultra-subtle panning
       const scale = Math.max(W / bg.width, H / bg.height) * 1.08;
       const scaledW = bg.width * scale;
       const scaledH = bg.height * scale;
 
-      // Ultra-subtle 2% horizontal parallax, rock-solid vertical lock (no dizzying jumps!)
       const maxCamX = Math.max(1, this.worldWidth - W);
       const bgTravelX = Math.max(0, scaledW - W);
       const bgX = -(camX / maxCamX) * (bgTravelX * 0.25);
-      const bgY = (H - scaledH) / 2; // Locked vertically for complete visual stability
+      const bgY = (H - scaledH) / 2;
 
       ctx.drawImage(bg, bgX, bgY, scaledW, scaledH);
 
-      // Gentle atmospheric depth haze
       const mistGrad = ctx.createLinearGradient(0, H * 0.55, 0, H);
       mistGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
       mistGrad.addColorStop(0.7, 'rgba(180, 205, 215, 0.12)');
@@ -1387,22 +1343,18 @@ class MultiplayerGameApp {
     ctx.save();
     ctx.translate(-camX, -camY);
 
-    // 2. Draw Natural Terrain (3D Shaded Cliffs, Rocks, and Stone Shelter)
+    // 2. Draw Natural Terrain
     for (const plat of this.platforms) {
       if (plat.type === 'GROUND') {
-        // Natural Earth & Bedrock
         ctx.fillStyle = '#2C1B10';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
 
-        // Subsoil Layer
         ctx.fillStyle = '#422A18';
         ctx.fillRect(plat.x, plat.y, plat.w, 36);
 
-        // Lush Natural Grass Layer
         ctx.fillStyle = '#388E3C';
         ctx.fillRect(plat.x, plat.y, plat.w, 14);
 
-        // 3D Grass Tufts & Wildflowers
         ctx.fillStyle = '#66BB6A';
         for (let x = 0; x < plat.w; x += 16) {
           ctx.beginPath();
@@ -1412,40 +1364,27 @@ class MultiplayerGameApp {
           ctx.fill();
         }
       } else if (plat.type === 'ROCK') {
-        // Multi-Facet 3D Natural Rock Ledge
         ctx.save();
-        // Drop Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
         ctx.fillRect(plat.x + 4, plat.y + plat.h, plat.w - 8, 12);
 
-        // Granite Body
         ctx.fillStyle = '#37474F';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
 
-        // Rock Strata Shading
         ctx.fillStyle = '#263238';
         ctx.fillRect(plat.x, plat.y + plat.h - 12, plat.w, 12);
 
-        // Mossy Overhang Top
         ctx.fillStyle = '#4CAF50';
         ctx.fillRect(plat.x, plat.y, plat.w, 8);
-
-        // Hanging Vines
-        ctx.fillStyle = '#2E7D32';
-        for (let x = plat.x + 20; x < plat.x + plat.w - 20; x += 35) {
-          ctx.fillRect(x, plat.y + 8, 4, 10 + (x % 7));
-        }
 
         ctx.strokeStyle = '#1E272C';
         ctx.lineWidth = 2;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
         ctx.restore();
       } else if (plat.type === 'HOUSE_ROOF') {
-        // Natural Stone Shelter Roof Slab
         ctx.save();
         ctx.fillStyle = '#263238';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-        // Moss & Turf Top
         ctx.fillStyle = '#4CAF50';
         ctx.fillRect(plat.x, plat.y, plat.w, 10);
         ctx.strokeStyle = '#FFD600';
@@ -1453,7 +1392,6 @@ class MultiplayerGameApp {
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
         ctx.restore();
       } else if (plat.type === 'HOUSE_WALL') {
-        // Stone Masonry Shelter Wall
         ctx.save();
         ctx.fillStyle = '#1E272C';
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
@@ -1464,7 +1402,7 @@ class MultiplayerGameApp {
       }
     }
 
-    // Draw Central Shelter Interior Aura & Sign
+    // Central Vault Aura
     ctx.save();
     ctx.fillStyle = 'rgba(255, 214, 0, 0.08)';
     ctx.fillRect(1626, 876, 348, 204);
@@ -1476,18 +1414,14 @@ class MultiplayerGameApp {
     ctx.fillText('🏛️ RAREST WEAPON VAULT', 1800, 915);
     ctx.restore();
 
-    // 3. Draw Tactical Auto-Pickups
+    // 3. Draw Tactical Pickups
     for (const pk of this.tacticalPickups) {
-      if (pk.available) {
-        this.drawTacticalPickup(ctx, pk);
-      }
+      if (pk.available) this.drawTacticalPickup(ctx, pk);
     }
 
-    // 4. Draw Dropped Ground Guns & [F] Prompt
+    // 4. Draw Dropped Guns
     for (const gun of this.groundGuns) {
-      if (gun.available) {
-        this.drawGroundGun(ctx, gun);
-      }
+      if (gun.available) this.drawGroundGun(ctx, gun);
     }
 
     // 5. Draw Smoke Clouds
@@ -1555,11 +1489,6 @@ class MultiplayerGameApp {
         ctx.beginPath();
         ctx.moveTo(8, -4); ctx.lineTo(14, 0); ctx.lineTo(8, 4);
         ctx.fill();
-        this.particles.push({
-          x: b.x, y: b.y,
-          vx: (Math.random() - 0.5), vy: (Math.random() - 0.5),
-          color: '#888888', alpha: 0.8, radius: 3
-        });
       } else {
         ctx.strokeStyle = b.color;
         ctx.lineWidth = b.weapon === 'sniper' ? 4 : 3;
@@ -1573,14 +1502,26 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 10. Draw Remote Articulated Soldiers
+    // 10. Draw Remote Soldiers
     this.remotePlayers.forEach(rp => {
-      this.drawArticulatedSoldier(ctx, rp, false, rp.walkCycle || 0, 0);
+      if (!rp.isDead && rp.hp > 0) {
+        this.drawArticulatedSoldier(ctx, rp, false, rp.walkCycle || 0, 0);
+      }
     });
 
-    // 11. Draw Local Articulated Soldier
-    if (this.localPlayer.hp > 0) {
+    // 11. Draw Local Soldier
+    if (!this.localPlayer.isDead && this.localPlayer.hp > 0) {
       this.drawArticulatedSoldier(ctx, this.localPlayer, true, this.walkCycle, this.recoilOffset);
+    } else if (this.localPlayer.isDead) {
+      // Draw Respawn Countdown Tag
+      ctx.save();
+      ctx.font = 'bold 16px "Chakra Petch", sans-serif';
+      ctx.fillStyle = '#FF3366';
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#FF3366';
+      ctx.textAlign = 'center';
+      ctx.fillText(`💀 ELIMINATED • RESPAWNING IN ${Math.max(1, this.respawnTimer)}s...`, this.localPlayer.x, this.localPlayer.y - 20);
+      ctx.restore();
     }
 
     // 12. Draw Floating Notifications
@@ -1599,7 +1540,6 @@ class MultiplayerGameApp {
     ctx.restore(); // END WORLD SPACE
   }
 
-  // ──────────────── DRAW GROUND WEAPON & [F] PROMPT ────────────────
   drawGroundGun(ctx, gun) {
     ctx.save();
     ctx.translate(gun.x, gun.y);
@@ -1609,7 +1549,6 @@ class MultiplayerGameApp {
     const isNearby = this.nearbyGun === gun;
     const glowColor = gun.rarity === 'LEGENDARY' ? '#FFD600' : gun.rarity === 'RARE' ? '#00FF66' : gun.rarity === 'UNCOMMON' ? '#FF7B00' : '#00E5FF';
 
-    // Holographic Ground Disc
     ctx.save();
     ctx.scale(1, 0.4);
     ctx.beginPath();
@@ -1623,7 +1562,6 @@ class MultiplayerGameApp {
     ctx.stroke();
     ctx.restore();
 
-    // Floating 3D Gun Model
     ctx.save();
     ctx.translate(0, bob);
     ctx.shadowBlur = 14;
@@ -1658,7 +1596,6 @@ class MultiplayerGameApp {
     }
     ctx.restore();
 
-    // In-World [F] Prompt Badge when nearby
     if (isNearby) {
       ctx.save();
       ctx.translate(0, -34 + bob);
@@ -1687,7 +1624,6 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // ──────────────── DRAW TACTICAL AUTO-PICKUPS ────────────────
   drawTacticalPickup(ctx, pk) {
     ctx.save();
     ctx.translate(pk.x, pk.y);
@@ -1745,7 +1681,6 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // ──────────────── SKELETAL ARTICULATED SOLDIER RIGGING ────────────────
   drawArticulatedSoldier(ctx, p, isLocal, walkCycle, recoil) {
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -1767,16 +1702,12 @@ class MultiplayerGameApp {
     }
 
     ctx.save();
-    if (facingLeft) {
-      ctx.scale(-1, 1);
-    }
+    if (facingLeft) ctx.scale(-1, 1);
 
     let localAim = p.aimAngle;
-    if (facingLeft) {
-      localAim = Math.PI - p.aimAngle;
-    }
+    if (facingLeft) localAim = Math.PI - p.aimAngle;
 
-    // 1. BACK JETPACK
+    // 1. JETPACK
     ctx.fillStyle = '#222B38';
     ctx.strokeStyle = '#4A5B70';
     ctx.lineWidth = 1.5;
@@ -1786,7 +1717,7 @@ class MultiplayerGameApp {
     ctx.fillRect(-22, 12, 6, 6);
     ctx.fillRect(-15, 12, 6, 6);
 
-    // 2. ARTICULATED LEGS & BOOTS
+    // 2. LEGS
     const legAngle1 = p.isFlying ? 0.35 : Math.sin(walkCycle) * 0.45;
     const legAngle2 = p.isFlying ? 0.55 : -Math.sin(walkCycle) * 0.45;
 
@@ -1799,7 +1730,7 @@ class MultiplayerGameApp {
     ctx.fillRect(-4, 12, 9, 6);
     ctx.restore();
 
-    // 3. TORSO & ARMORED CHEST VEST
+    // 3. TORSO
     ctx.fillStyle = '#2A3444';
     ctx.fillRect(-10, -10, 20, 22);
     ctx.fillStyle = teamColor;
@@ -1822,7 +1753,7 @@ class MultiplayerGameApp {
     ctx.fillRect(-4, 12, 9, 6);
     ctx.restore();
 
-    // 4. HEAD / BALLISTIC HELMET
+    // 4. HELMET
     ctx.save();
     ctx.translate(0, -16);
     ctx.rotate(localAim * 0.25);
@@ -1843,7 +1774,7 @@ class MultiplayerGameApp {
     ctx.shadowBlur = 0;
     ctx.restore();
 
-    // 5. ARTICULATED 360° SHOULDER & ARM
+    // 5. SHOULDER & WEAPON
     ctx.save();
     ctx.translate(0, -2);
     ctx.rotate(localAim);
@@ -1860,7 +1791,7 @@ class MultiplayerGameApp {
     ctx.restore();
     ctx.restore();
 
-    // Overhead HUD Tags
+    // Overhead HUD
     ctx.shadowBlur = 0;
     ctx.font = 'bold 11px "Chakra Petch", sans-serif';
     ctx.fillStyle = '#FFF';
@@ -1878,7 +1809,6 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // ──────────────── WEAPON GEOMETRY MODELS ────────────────
   drawWeaponModel(ctx, wep, teamColor) {
     ctx.save();
     if (wep === 'uzi') {
