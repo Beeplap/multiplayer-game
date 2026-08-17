@@ -27,7 +27,7 @@ void GameEngine::update(float moveX, float thrustY, float aimRad, bool shootRequ
         }
     }
 
-    // 3. Update Projectiles & Tacticals
+    // 3. Update Projectiles with Platform & Obstacle Collision
     updateProjectiles(dt);
     updateTacticals(dt);
 
@@ -80,26 +80,58 @@ void GameEngine::updateProjectiles(float dt) {
         it->update(dt);
         if (!it->active) {
             it = bullets.erase(it);
-        } else {
-            // Check collision with remote players
-            for (auto& [id, rp] : remotePlayers) {
-                if (rp.health > 0.0f && it->ownerId != rp.playerId) {
-                    if (Vec2::distance(it->pos, rp.position) <= JetpackSoldier::SOLDIER_RADIUS) {
-                        rp.takeDamage(it->damage);
-                        it->active = false;
-                        break;
-                    }
+            continue;
+        }
+
+        // Platform & Obstacle Collision Check (Bullets CANNOT penetrate solid platforms)
+        bool hitObstacle = false;
+        for (const auto& plat : arena.platforms) {
+            if (plat.contains(it->pos)) {
+                hitObstacle = true;
+                break;
+            }
+        }
+
+        if (hitObstacle) {
+            it = bullets.erase(it);
+            continue;
+        }
+
+        // Check collision with remote players
+        bool hitPlayer = false;
+        for (auto& [id, rp] : remotePlayers) {
+            if (rp.health > 0.0f && it->ownerId != rp.playerId) {
+                if (Vec2::distance(it->pos, rp.position) <= JetpackSoldier::SOLDIER_RADIUS) {
+                    rp.takeDamage(it->damage);
+                    hitPlayer = true;
+                    break;
                 }
             }
+        }
+
+        if (hitPlayer) {
+            it = bullets.erase(it);
+        } else {
             ++it;
         }
     }
 }
 
 void GameEngine::updateTacticals(float dt) {
-    // 1. Grenades
+    // 1. Grenades (Platform bouncing)
     for (auto it = grenades.begin(); it != grenades.end();) {
         it->update(dt);
+
+        // Check platform bounce
+        for (const auto& plat : arena.platforms) {
+            if (plat.contains(it->pos)) {
+                it->vel.y = -it->vel.y * 0.55f;
+                it->vel.x *= 0.75f;
+                it->pos.y = plat.y - 4.0f;
+                break;
+            }
+        }
+
         if (it->exploded) {
             applyExplosionDamage(it->pos, ActiveGrenade::BLAST_RADIUS, ActiveGrenade::MAX_DAMAGE, it->ownerId);
             it = grenades.erase(it);
@@ -113,12 +145,10 @@ void GameEngine::updateTacticals(float dt) {
         it->update(dt);
         bool triggered = false;
 
-        // Check local player trigger if on opposing team
         if (it->checkTrigger(localPlayer.position, static_cast<uint8_t>(localPlayer.team))) {
             triggered = true;
         }
 
-        // Check remote players trigger
         for (const auto& [id, rp] : remotePlayers) {
             if (it->checkTrigger(rp.position, static_cast<uint8_t>(rp.team))) {
                 triggered = true;
@@ -162,7 +192,6 @@ void GameEngine::checkPickupCollisions() {
 }
 
 void GameEngine::applyExplosionDamage(Vec2 center, float radius, float maxDamage, uint32_t /*attackerId*/) {
-    // Damage to local player
     float dist = Vec2::distance(center, localPlayer.position);
     if (dist <= radius) {
         float falloff = 1.0f - (dist / radius);
