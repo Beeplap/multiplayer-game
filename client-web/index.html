@@ -588,6 +588,112 @@
           </div>
           <span class="joy-label" id="joy-right-label">AIM / DRAG TO FIRE</span>
         </div>
+      <!-- Emergency Low-HP Flashing Red Screen Vignette -->
+      <div id="low-hp-vignette" class="low-hp-vignette hidden"></div>
+    </div>
+
+    <!-- MODAL: TACTICAL COMBAT PAUSE MENU -->
+    <div id="modal-pause" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel pause-card">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-tag">TACTICAL COMBAT</span>
+            <h2>MISSION PAUSED</h2>
+          </div>
+          <button id="btn-close-pause" class="btn-icon-small danger" type="button">✕</button>
+        </div>
+        <div class="pause-actions-list">
+          <button id="btn-pause-resume" class="btn btn-launch btn-block" type="button">▶️ RESUME COMBAT</button>
+          <button id="btn-pause-restart" class="btn btn-accent btn-block" type="button">🔄 RESTART WAVE</button>
+          <button id="btn-pause-settings" class="btn btn-secondary btn-block" type="button">⚙️ SETTINGS & AUDIO</button>
+          <button id="btn-pause-exit" class="btn btn-hotspot btn-block" type="button">🚪 EXIT TO MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: MISSION DEBRIEF & GAME OVER SUMMARY -->
+    <div id="modal-debrief" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel debrief-card">
+        <div class="debrief-header">
+          <span class="debrief-tag">MISSION SUMMARY</span>
+          <h2 id="debrief-title">TACTICAL DEFEAT</h2>
+          <p id="debrief-subtitle">Hostile bot swarms overwhelmed your position.</p>
+        </div>
+        <div class="debrief-stats-grid">
+          <div class="debrief-stat-box">
+            <span class="d-label">FINAL SCORE</span>
+            <strong id="debrief-score" class="d-val gold">0 PTS</strong>
+          </div>
+          <div class="debrief-stat-box">
+            <span class="d-label">WAVE REACHED</span>
+            <strong id="debrief-wave" class="d-val cyan">WAVE 1</strong>
+          </div>
+          <div class="debrief-stat-box">
+            <span class="d-label">BOTS ELIMINATED</span>
+            <strong id="debrief-kills" class="d-val red">0</strong>
+          </div>
+          <div class="debrief-stat-box">
+            <span class="d-label">BEST RECORD</span>
+            <strong id="debrief-record" class="d-val emerald">0 PTS</strong>
+          </div>
+        </div>
+        <div class="debrief-actions">
+          <button id="btn-debrief-retry" class="btn btn-hero-deploy" type="button">
+            <span class="btn-icon">🔥</span>
+            <div class="btn-text">
+              <strong>PLAY AGAIN</strong>
+              <small>Deploy immediately with Delta-1 AI</small>
+            </div>
+          </button>
+          <button id="btn-debrief-menu" class="btn btn-secondary btn-block" type="button">🏠 RETURN TO MAIN MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: SETTINGS & CONTROLS CONFIGURATION -->
+    <div id="modal-settings" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-tag">TACTICAL CONFIGURATION</span>
+            <h2>SETTINGS & CONTROLS</h2>
+          </div>
+          <button id="btn-close-settings" class="btn-icon-small danger" type="button">✕</button>
+        </div>
+        <div class="settings-content-grid">
+          <div class="setting-row">
+            <div class="setting-label-group">
+              <strong>SOUND EFFECTS (SFX)</strong>
+              <small>Tactical weapon fire, bot explosions, and combat cues</small>
+            </div>
+            <input type="range" id="setting-sfx-vol" min="0" max="100" value="80" class="setting-slider">
+          </div>
+          <div class="setting-row">
+            <div class="setting-label-group">
+              <strong>TOUCH JOYSTICK SIZE</strong>
+              <small>Virtual stick diameter for mobile touch screens</small>
+            </div>
+            <div class="setting-btn-group" id="setting-joy-size-group">
+              <button class="btn-setting-option" data-size="compact" type="button">COMPACT</button>
+              <button class="btn-setting-option active" data-size="normal" type="button">STANDARD</button>
+              <button class="btn-setting-option" data-size="large" type="button">LARGE</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label-group">
+              <strong>HAPTIC VIBRATION</strong>
+              <small>Recoil and impact feedback on supported mobile devices</small>
+            </div>
+            <button id="btn-toggle-haptics" class="btn btn-secondary btn-toggle-pill active" type="button">ENABLED ✅</button>
+          </div>
+          <div class="setting-row">
+            <div class="setting-label-group">
+              <strong>RESET LOCAL DATA</strong>
+              <small>Clear saved high scores and profile from device storage</small>
+            </div>
+            <button id="btn-clear-storage" class="btn btn-hotspot" type="button">RESET RECORDS</button>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -57,6 +57,18 @@ function generate5DigitCode() {
   return code;
 }
 
+// Security: Strict HTML Entity Escaper to prevent XSS attacks via nicknames or broadcast packets
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/[&<>"']/g, (m) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[m]));
+}
+
 // Get Local Wi-Fi / Hotspot IP Addresses for direct 1ms local multiplayer
 function getNetworkAddresses() {
   const interfaces = os.networkInterfaces();
@@ -174,8 +186,9 @@ function handleClientMessage(ws, client, msg) {
 
     case 'SET_NICKNAME': {
       if (payload && payload.nickname) {
-        // Sanitize string to prevent injection
-        client.nickname = String(payload.nickname).trim().slice(0, 14) || client.nickname;
+        // Sanitize and escape string to prevent XSS / HTML injection attacks
+        const cleanName = escapeHtml(String(payload.nickname).trim().slice(0, 14));
+        client.nickname = cleanName || client.nickname;
         if (client.roomCode) broadcastLobbyState(client.roomCode);
       }
       break;
@@ -226,7 +239,12 @@ function handleClientMessage(ws, client, msg) {
     }
 
     case 'JOIN_LOBBY': {
-      const targetCode = (payload?.roomCode || '').toUpperCase().trim();
+      const targetCode = String(payload?.roomCode || '').toUpperCase().trim();
+      if (!/^[2-9A-HJ-NP-Z]{5}$/.test(targetCode)) {
+        send(ws, 'LOBBY_JOIN_ERROR', { message: 'Invalid 5-digit room code format!' });
+        return;
+      }
+
       const lobby = lobbies.get(targetCode);
 
       if (!lobby) {

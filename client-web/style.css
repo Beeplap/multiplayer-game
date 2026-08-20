@@ -1853,3 +1853,195 @@ html, body {
   0% { transform: translate(-50%, 20px); opacity: 0; }
   100% { transform: translate(-50%, 0); opacity: 1; }
 }
+
+/* ──────────────── EMERGENCY LOW-HP RED FLASHING VIGNETTE ──────────────── */
+.low-hp-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  box-shadow: inset 0 0 90px rgba(255, 23, 68, 0.75);
+  animation: lowHpPulse 1.2s infinite ease-in-out;
+}
+
+.low-hp-vignette.hidden { display: none; }
+
+@keyframes lowHpPulse {
+  0%, 100% { opacity: 0.35; box-shadow: inset 0 0 60px rgba(255, 23, 68, 0.5); }
+  50% { opacity: 1.0; box-shadow: inset 0 0 120px rgba(255, 23, 68, 0.9); }
+}
+
+/* ──────────────── MODAL: TACTICAL PAUSE MENU ──────────────── */
+.pause-card {
+  max-width: 380px;
+  padding: 22px;
+  text-align: center;
+}
+
+.pause-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* ──────────────── MODAL: MISSION DEBRIEF & GAME OVER ──────────────── */
+.debrief-card {
+  max-width: 460px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+.debrief-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.debrief-tag {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-red);
+  letter-spacing: 2px;
+  background: rgba(255, 51, 102, 0.15);
+  padding: 2px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 51, 102, 0.3);
+}
+
+.debrief-header h2 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.debrief-header p {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.debrief-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.debrief-stat-box {
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--panel-border);
+  padding: 10px 14px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.d-label {
+  font-family: var(--font-display);
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.d-val {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.d-val.gold { color: var(--accent-gold); }
+.d-val.cyan { color: var(--accent-cyan); }
+.d-val.red { color: var(--accent-red); }
+.d-val.emerald { color: #00e676; }
+
+.debrief-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ──────────────── MODAL: SETTINGS & CONTROLS ──────────────── */
+.settings-content-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  gap: 12px;
+}
+
+.setting-label-group {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 2px;
+}
+
+.setting-label-group strong {
+  font-family: var(--font-display);
+  font-size: 12px;
+  color: #fff;
+}
+
+.setting-label-group small {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.setting-slider {
+  accent-color: var(--accent-cyan);
+  width: 130px;
+  cursor: pointer;
+}
+
+.setting-btn-group {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-setting-option {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-setting-option.active {
+  background: var(--accent-cyan);
+  color: #000;
+  border-color: var(--accent-cyan);
+}
+
+.btn-toggle-pill {
+  padding: 4px 12px;
+  font-size: 10px;
+}
+
+.btn-toggle-pill.active {
+  background: rgba(0, 230, 118, 0.2);
+  color: #00e676;
+  border-color: rgba(0, 230, 118, 0.5);
+}

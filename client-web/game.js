@@ -53,7 +53,16 @@ class MultiplayerGameApp {
     // ──────────────── AUDIO & CUSTOMIZATION ENGINE ────────────────
     this.sfxEnabled = true;
     this.audioCtx = null;
-    this.soldierColor = '#FF3366';
+    this.sfxVolume = parseFloat(localStorage.getItem('wegether_sfx_vol') || '0.8');
+    this.hapticsEnabled = localStorage.getItem('wegether_haptics') !== 'false';
+    this.joystickSize = localStorage.getItem('wegether_joy_size') || 'normal';
+    this.myNickname = localStorage.getItem('wegether_callsign') || 'Commander';
+    this.soldierColor = localStorage.getItem('wegether_armor_color') || '#FF3366';
+    
+    // Floating damage numbers & hitmarker indicators
+    this.floatingTexts = [];
+    this.hitmarkerTimer = 0;
+    this.totalKills = 0;
 
     this.initDOM();
     this.detectTouchDevice();
@@ -62,6 +71,7 @@ class MultiplayerGameApp {
     this.setupEventListeners();
     this.initGameCanvas();
     this.updateHighScoreUI();
+    this.applyJoystickSize(this.joystickSize);
     this.initMenuSoldierCanvas();
   }
 
@@ -89,12 +99,32 @@ class MultiplayerGameApp {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(480, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.06);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12 * this.sfxVolume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.06);
+    } catch (e) {}
+  }
+
+  playHitmarkerSound() {
+    if (!this.sfxEnabled) return;
+    this.initAudio();
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1800, ctx.currentTime + 0.04);
+      gain.gain.setValueAtTime(0.2 * this.sfxVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.04);
     } catch (e) {}
   }
 
@@ -105,6 +135,7 @@ class MultiplayerGameApp {
     try {
       const ctx = this.audioCtx;
       const now = ctx.currentTime;
+      const vol = this.sfxVolume;
 
       if (wep === 'uzi') {
         const osc = ctx.createOscillator();
@@ -112,7 +143,7 @@ class MultiplayerGameApp {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(320, now);
         osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
-        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.setValueAtTime(0.14 * vol, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -124,7 +155,7 @@ class MultiplayerGameApp {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(140, now);
         osc.frequency.exponentialRampToValueAtTime(30, now + 0.22);
-        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.setValueAtTime(0.35 * vol, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -136,7 +167,7 @@ class MultiplayerGameApp {
         osc.type = 'square';
         osc.frequency.setValueAtTime(880, now);
         osc.frequency.exponentialRampToValueAtTime(120, now + 0.18);
-        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.setValueAtTime(0.25 * vol, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -148,7 +179,7 @@ class MultiplayerGameApp {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(160, now);
         osc.frequency.exponentialRampToValueAtTime(35, now + 0.35);
-        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.setValueAtTime(0.35 * vol, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -170,7 +201,7 @@ class MultiplayerGameApp {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(90, now);
       osc.frequency.exponentialRampToValueAtTime(20, now + 0.45);
-      gain.gain.setValueAtTime(0.38, now);
+      gain.gain.setValueAtTime(0.38 * this.sfxVolume, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -185,14 +216,14 @@ class MultiplayerGameApp {
     if (!this.audioCtx) return;
     try {
       const ctx = this.audioCtx;
-      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.50];
       notes.forEach((freq, i) => {
         const now = ctx.currentTime + i * 0.09;
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, now);
-        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.setValueAtTime(0.18 * this.sfxVolume, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -228,6 +259,11 @@ class MultiplayerGameApp {
     this.modalMpHub = document.getElementById('modal-multiplayer-hub');
     this.modalArmory = document.getElementById('modal-armory');
     this.modalControls = document.getElementById('modal-controls-guide');
+    this.modalPause = document.getElementById('modal-pause');
+    this.modalDebrief = document.getElementById('modal-debrief');
+    this.modalSettings = document.getElementById('modal-settings');
+    this.lowHpVignette = document.getElementById('low-hp-vignette');
+
     this.menuHighScoreEl = document.getElementById('menu-high-score');
     this.menuHighestWaveEl = document.getElementById('menu-highest-wave');
     this.displayCallsignEl = document.getElementById('display-callsign');
@@ -243,6 +279,13 @@ class MultiplayerGameApp {
 
     this.nicknameInput = document.getElementById('player-nickname');
     this.joinCodeInput = document.getElementById('join-code-input');
+
+    if (this.nicknameInput && this.myNickname) {
+      this.nicknameInput.value = this.myNickname;
+    }
+    if (this.displayCallsignEl && this.myNickname) {
+      this.displayCallsignEl.textContent = this.myNickname;
+    }
 
     this.displayRoomCodeEl = document.getElementById('display-room-code');
     this.lobbyModeTagEl = document.getElementById('lobby-mode-tag');
@@ -277,6 +320,30 @@ class MultiplayerGameApp {
 
     this.serverAddressTextEl = document.getElementById('connected-server-address');
     this.serverStatusDotEl = document.getElementById('server-status-dot');
+
+    // Restore selected color swatch
+    document.querySelectorAll('.color-swatch-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.color === this.soldierColor);
+    });
+  }
+
+  applyJoystickSize(size = 'normal') {
+    this.joystickSize = size;
+    localStorage.setItem('wegether_joy_size', size);
+    const zones = document.querySelectorAll('.joystick-zone');
+    const bases = document.querySelectorAll('.joystick-base');
+    const thumbs = document.querySelectorAll('.joystick-thumb');
+
+    let basePx = '100px', thumbPx = '44px', zonePx = '140px';
+    if (size === 'compact') {
+      basePx = '80px'; thumbPx = '36px'; zonePx = '110px';
+    } else if (size === 'large') {
+      basePx = '120px'; thumbPx = '52px'; zonePx = '160px';
+    }
+
+    zones.forEach(z => { z.style.width = zonePx; z.style.height = zonePx; });
+    bases.forEach(b => { b.style.width = basePx; b.style.height = basePx; });
+    thumbs.forEach(t => { t.style.width = thumbPx; t.style.height = thumbPx; });
   }
 
   initMenuSoldierCanvas() {
@@ -641,12 +708,8 @@ class MultiplayerGameApp {
       if (this.modalControls) this.modalControls.classList.remove('hidden');
     };
     const dockGuide = document.getElementById('dock-btn-guide');
-    const dockSettings = document.getElementById('dock-btn-settings');
-    const btnOpenSettings = document.getElementById('btn-open-settings');
     const closeControls = document.getElementById('btn-close-controls');
     if (dockGuide) dockGuide.addEventListener('click', openControls);
-    if (dockSettings) dockSettings.addEventListener('click', openControls);
-    if (btnOpenSettings) btnOpenSettings.addEventListener('click', openControls);
     if (closeControls && this.modalControls) {
       closeControls.addEventListener('click', () => {
         this.playMenuClick();
@@ -674,6 +737,7 @@ class MultiplayerGameApp {
         btn.classList.add('active');
         this.soldierColor = btn.dataset.color || '#FF3366';
         this.localPlayer.color = this.soldierColor;
+        localStorage.setItem('wegether_armor_color', this.soldierColor);
         this.renderMenuSoldier();
       });
     });
@@ -683,6 +747,7 @@ class MultiplayerGameApp {
       this.nicknameInput.addEventListener('input', () => {
         const val = this.nicknameInput.value.trim() || 'Commander';
         this.myNickname = val;
+        localStorage.setItem('wegether_callsign', val);
         if (this.displayCallsignEl) this.displayCallsignEl.textContent = val;
         this.renderMenuSoldier();
       });
@@ -805,11 +870,98 @@ class MultiplayerGameApp {
       });
     });
 
-    document.getElementById('btn-exit-game').addEventListener('click', () => {
+    // 11. SETTINGS MODAL & PREFERENCES
+    const openSettings = () => {
       this.playMenuClick();
-      if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
-      this.swarmNextWaveTimer = null;
-      if (this.gameMode === 'SWARM_SURVIVAL') {
+      if (this.modalSettings) this.modalSettings.classList.remove('hidden');
+    };
+    const closeSettings = document.getElementById('btn-close-settings');
+    const dockSettings = document.getElementById('dock-btn-settings');
+    const btnOpenSettings = document.getElementById('btn-open-settings');
+    if (dockSettings) dockSettings.addEventListener('click', openSettings);
+    if (btnOpenSettings) btnOpenSettings.addEventListener('click', openSettings);
+    if (closeSettings && this.modalSettings) {
+      closeSettings.addEventListener('click', () => {
+        this.playMenuClick();
+        this.modalSettings.classList.add('hidden');
+      });
+    }
+
+    const sfxSlider = document.getElementById('setting-sfx-vol');
+    if (sfxSlider) {
+      sfxSlider.value = Math.round(this.sfxVolume * 100);
+      sfxSlider.addEventListener('input', (e) => {
+        this.sfxVolume = parseFloat(e.target.value) / 100;
+        localStorage.setItem('wegether_sfx_vol', this.sfxVolume);
+      });
+    }
+
+    document.querySelectorAll('.btn-setting-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.playMenuClick();
+        document.querySelectorAll('.btn-setting-option').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.applyJoystickSize(btn.dataset.size);
+      });
+    });
+
+    const btnHaptics = document.getElementById('btn-toggle-haptics');
+    if (btnHaptics) {
+      btnHaptics.classList.toggle('active', this.hapticsEnabled);
+      btnHaptics.textContent = this.hapticsEnabled ? 'ENABLED ✅' : 'DISABLED ❌';
+      btnHaptics.addEventListener('click', () => {
+        this.hapticsEnabled = !this.hapticsEnabled;
+        localStorage.setItem('wegether_haptics', this.hapticsEnabled);
+        btnHaptics.classList.toggle('active', this.hapticsEnabled);
+        btnHaptics.textContent = this.hapticsEnabled ? 'ENABLED ✅' : 'DISABLED ❌';
+        this.playMenuClick();
+      });
+    }
+
+    const btnClearStorage = document.getElementById('btn-clear-storage');
+    if (btnClearStorage) {
+      btnClearStorage.addEventListener('click', () => {
+        if (confirm('Reset high score and records?')) {
+          localStorage.removeItem('wegether_highscore');
+          localStorage.removeItem('wegether_highest_wave');
+          this.swarmState.highScore = 0;
+          this.swarmState.highestWave = 1;
+          this.updateHighScoreUI();
+          this.showToast('RECORDS RESET', 'Local combat history has been wiped.', '🧹');
+        }
+      });
+    }
+
+    // 12. TACTICAL PAUSE & DEBRIEF MODALS
+    const openPauseMenu = () => {
+      this.playMenuClick();
+      if (this.modalPause) this.modalPause.classList.remove('hidden');
+    };
+    const closePauseMenu = () => {
+      this.playMenuClick();
+      if (this.modalPause) this.modalPause.classList.add('hidden');
+    };
+
+    const btnClosePause = document.getElementById('btn-close-pause');
+    const btnResumePause = document.getElementById('btn-pause-resume');
+    const btnRestartPause = document.getElementById('btn-pause-restart');
+    const btnPauseSettings = document.getElementById('btn-pause-settings');
+    const btnPauseExit = document.getElementById('btn-pause-exit');
+
+    if (btnClosePause) btnClosePause.addEventListener('click', closePauseMenu);
+    if (btnResumePause) btnResumePause.addEventListener('click', closePauseMenu);
+    if (btnPauseSettings) btnPauseSettings.addEventListener('click', openSettings);
+    if (btnRestartPause) {
+      btnRestartPause.addEventListener('click', () => {
+        closePauseMenu();
+        this.startQuickPlaySwarm();
+      });
+    }
+    if (btnPauseExit) {
+      btnPauseExit.addEventListener('click', () => {
+        closePauseMenu();
+        if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
+        this.swarmNextWaveTimer = null;
         this.gameMode = 'MULTIPLAYER';
         this.swarmBots = [];
         this.groundGuns = [];
@@ -817,9 +969,42 @@ class MultiplayerGameApp {
         this.showScreen('menu');
         this.updateHighScoreUI();
         this.renderMenuSoldier();
-      } else {
-        this.showScreen('lobby');
+      });
+    }
+
+    const btnDebriefRetry = document.getElementById('btn-debrief-retry');
+    const btnDebriefMenu = document.getElementById('btn-debrief-menu');
+    if (btnDebriefRetry && this.modalDebrief) {
+      btnDebriefRetry.addEventListener('click', () => {
+        this.playMenuClick();
+        this.modalDebrief.classList.add('hidden');
+        this.startQuickPlaySwarm();
+      });
+    }
+    if (btnDebriefMenu && this.modalDebrief) {
+      btnDebriefMenu.addEventListener('click', () => {
+        this.playMenuClick();
+        this.modalDebrief.classList.add('hidden');
+        this.showScreen('menu');
+        this.updateHighScoreUI();
+        this.renderMenuSoldier();
+      });
+    }
+
+    // Keyboard ESC Pause toggle
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.screens.game && this.screens.game.classList.contains('active')) {
+        if (this.modalPause && !this.modalPause.classList.contains('hidden')) {
+          closePauseMenu();
+        } else {
+          openPauseMenu();
+        }
       }
+    });
+
+    document.getElementById('btn-exit-game').addEventListener('click', () => {
+      this.playMenuClick();
+      openPauseMenu();
     });
 
     // Fullscreen Toggles
@@ -1577,12 +1762,19 @@ class MultiplayerGameApp {
     this.swarmState.score = 0;
     this.swarmState.waveActive = true;
     this.swarmState.waveDelayTimer = 0;
+    this.totalKills = 0;
     this.swarmBots = [];
     this.groundGuns = [];
     this.bullets = [];
     this.grenades = [];
     this.landmines = [];
     this.toxicClouds = [];
+    this.floatingTexts = [];
+    this.hitmarkerTimer = 0;
+
+    if (this.modalDebrief) this.modalDebrief.classList.add('hidden');
+    if (this.modalPause) this.modalPause.classList.add('hidden');
+    if (this.lowHpVignette) this.lowHpVignette.classList.add('hidden');
 
     this.updateSwarmHUD();
     this.startSwarmWave(1);
@@ -1891,16 +2083,44 @@ class MultiplayerGameApp {
       weapon
     });
 
-    if (this.deathCountdown) clearInterval(this.deathCountdown);
-    this.respawnTimer = 3;
-    this.deathCountdown = setInterval(() => {
-      this.respawnTimer--;
-      if (this.respawnTimer <= 0) {
-        clearInterval(this.deathCountdown);
-        this.deathCountdown = null;
-        this.respawnLocalPlayer();
+    if (this.lowHpVignette) this.lowHpVignette.classList.add('hidden');
+
+    if (this.gameMode === 'SWARM_SURVIVAL') {
+      // Swarm Mode: Show Tactical Mission Debrief Modal
+      if (this.modalDebrief) {
+        const titleEl = document.getElementById('debrief-title');
+        const subEl = document.getElementById('debrief-subtitle');
+        const scoreEl = document.getElementById('debrief-score');
+        const waveEl = document.getElementById('debrief-wave');
+        const killsEl = document.getElementById('debrief-kills');
+        const recEl = document.getElementById('debrief-record');
+
+        if (titleEl) titleEl.textContent = 'MISSION DEBRIEF';
+        if (subEl) subEl.textContent = `Operative fell in battle defending against bot swarms.`;
+        if (scoreEl) scoreEl.textContent = `${this.swarmState.score.toLocaleString()} PTS`;
+        if (waveEl) waveEl.textContent = `WAVE ${this.swarmState.wave}`;
+        if (killsEl) killsEl.textContent = `${this.totalKills || 0}`;
+        if (recEl) recEl.textContent = `${this.swarmState.highScore.toLocaleString()} PTS`;
+
+        setTimeout(() => {
+          if (this.localPlayer.isDead && this.gameMode === 'SWARM_SURVIVAL') {
+            this.modalDebrief.classList.remove('hidden');
+          }
+        }, 1100);
       }
-    }, 1000);
+    } else {
+      // Multiplayer Mode: 3-Second Respawn Cycle
+      if (this.deathCountdown) clearInterval(this.deathCountdown);
+      this.respawnTimer = 3;
+      this.deathCountdown = setInterval(() => {
+        this.respawnTimer--;
+        if (this.respawnTimer <= 0) {
+          clearInterval(this.deathCountdown);
+          this.deathCountdown = null;
+          this.respawnLocalPlayer();
+        }
+      }, 1000);
+    }
   }
 
   respawnLocalPlayer() {
@@ -2294,6 +2514,22 @@ class MultiplayerGameApp {
           const dmg = b.weapon === 'sniper' ? 85 : b.weapon === 'rpg' ? 120 : b.weapon === 'shotgun' ? 24 : 18;
           targetBot.hp -= dmg;
           this.spawnImpactSparks(b.x, b.y, '#FFD600');
+
+          // Trigger Tactical Hitmarker & Sound
+          if (b.ownerId === this.myPlayerId) {
+            this.hitmarkerTimer = 7;
+            this.playHitmarkerSound();
+            this.floatingTexts.push({
+              x: targetBot.x + (Math.random() - 0.5) * 16,
+              y: targetBot.y - 12,
+              text: `-${dmg}`,
+              color: dmg >= 80 ? '#FF1744' : '#FFD600',
+              size: dmg >= 80 ? 17 : 13,
+              alpha: 1.0,
+              life: 28
+            });
+          }
+
           if (targetBot.hp <= 0) {
             targetBot.isDead = true;
             this.handleBotKill(targetBot);
@@ -2960,6 +3196,25 @@ class MultiplayerGameApp {
       ctx.textAlign = 'center';
       ctx.fillText(notif.text, notif.x, notif.y);
       ctx.restore();
+    }
+
+    // 13. Floating Combat Damage Numbers
+    for (let idx = this.floatingTexts.length - 1; idx >= 0; idx--) {
+      const ft = this.floatingTexts[idx];
+      ft.y -= 0.85;
+      ft.life--;
+      ft.alpha = Math.max(0, ft.life / 28);
+
+      ctx.save();
+      ctx.globalAlpha = ft.alpha;
+      ctx.font = `900 ${ft.size || 14}px "Chakra Petch", sans-serif`;
+      ctx.fillStyle = ft.color || '#FFD600';
+      this.setGlow(ctx, ft.color || '#FFD600', 8);
+      ctx.textAlign = 'center';
+      ctx.fillText(ft.text, ft.x, ft.y);
+      ctx.restore();
+
+      if (ft.life <= 0) this.floatingTexts.splice(idx, 1);
     }
 
     ctx.restore(); // END WORLD SPACE
@@ -4031,6 +4286,22 @@ class MultiplayerGameApp {
     ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
     ctx.fill();
 
+    // Active Hitmarker X-Ticks (Pulsing Red Hit Feedback)
+    if (this.hitmarkerTimer > 0) {
+      this.hitmarkerTimer--;
+      ctx.strokeStyle = '#FF1744';
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = '#FF1744';
+      const sz = 11;
+      ctx.beginPath();
+      ctx.moveTo(-sz, -sz); ctx.lineTo(-sz + 5, -sz + 5);
+      ctx.moveTo(sz, -sz); ctx.lineTo(sz - 5, -sz + 5);
+      ctx.moveTo(-sz, sz); ctx.lineTo(-sz + 5, sz - 5);
+      ctx.moveTo(sz, sz); ctx.lineTo(sz - 5, sz - 5);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
@@ -4622,7 +4893,8 @@ class MultiplayerGameApp {
     this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
     this.createExplosion(bot.x, bot.y, 45, 0, 'LOCAL_EXPLODE', false);
 
-    // Score based on bot class
+    // Score & Kill tracking based on bot class
+    this.totalKills = (this.totalKills || 0) + 1;
     const scoreVal = bot.type === 'GOLIATH_MECH' ? 500 : bot.type === 'HEAVY_BOT' ? 350 : bot.type === 'PHANTOM_SLICER' ? 200 : bot.type === 'INSECTOID_WALKER' ? 150 : 100;
     this.swarmState.score += scoreVal;
 
@@ -5462,11 +5734,21 @@ class MultiplayerGameApp {
   }
 
   updateHUD() {
-    const hpRounded = Math.max(0, Math.round(this.localPlayer.hp));
+    const p = this.localPlayer;
+    const hpRounded = Math.max(0, Math.round(p.hp));
     if (this.lastRenderedHp !== hpRounded) {
       this.lastRenderedHp = hpRounded;
       if (this.hudHpFill) this.hudHpFill.style.width = `${hpRounded}%`;
       if (this.hudHpVal) this.hudHpVal.textContent = hpRounded;
+    }
+
+    // Toggle Emergency Low-HP Vignette
+    if (this.lowHpVignette) {
+      if (p.hp > 0 && p.hp < 30 && !p.isDead && this.screens.game && this.screens.game.classList.contains('active')) {
+        this.lowHpVignette.classList.remove('hidden');
+      } else {
+        this.lowHpVignette.classList.add('hidden');
+      }
     }
   }
 }
