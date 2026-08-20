@@ -57,18 +57,34 @@ function generate5DigitCode() {
   return code;
 }
 
-// Get Local Wi-Fi / LAN IP Address for direct 1ms local multiplayer
-function getLocalLanIp() {
+// Get Local Wi-Fi / Hotspot IP Addresses for direct 1ms local multiplayer
+function getNetworkAddresses() {
   const interfaces = os.networkInterfaces();
+  const addresses = [];
+  let primaryLanIp = '127.0.0.1';
+  let hotspotIp = null;
+
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        addresses.push({ name, ip: iface.address });
+        if (iface.address.startsWith('192.168.43.') || iface.address.startsWith('172.20.10.')) {
+          hotspotIp = iface.address;
+        }
+        if (primaryLanIp === '127.0.0.1') {
+          primaryLanIp = iface.address;
+        }
       }
     }
   }
-  return '127.0.0.1';
+  return {
+    primaryLanIp,
+    hotspotIp: hotspotIp || '192.168.43.1',
+    allIps: addresses
+  };
 }
+
+const netInfo = getNetworkAddresses();
 
 const lobbies = new Map();
 const clients = new Map();
@@ -98,7 +114,13 @@ wss.on('connection', (ws, req) => {
   };
   clients.set(ws, clientData);
 
-  send(ws, 'CONNECTED', { playerId, nickname: clientData.nickname });
+  send(ws, 'CONNECTED', { 
+    playerId, 
+    nickname: clientData.nickname,
+    lanIp: netInfo.primaryLanIp,
+    hotspotIp: netInfo.hotspotIp,
+    port: PORT
+  });
 
   ws.isAlive = true;
   ws.on('pong', () => {
@@ -566,13 +588,12 @@ function serializeLobby(lobby) {
   };
 }
 
-const localIp = getLocalLanIp();
-
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`=======================================================`);
   console.log(`🚀 WEGETHER — 2D MULTIPLAYER TACTICAL SERVER`);
-  console.log(`💻 Localhost URL:    http://localhost:${PORT}`);
-  console.log(`📱 LAN / Wi-Fi URL:  http://${localIp}:${PORT}  (⚡ 1-5ms Ping!)`);
+  console.log(`💻 Localhost:       http://localhost:${PORT}`);
+  console.log(`📱 LAN / Wi-Fi:     http://${netInfo.primaryLanIp}:${PORT}  (⚡ 1-5ms Ping!)`);
+  console.log(`📡 Mobile Hotspot:  http://${netInfo.hotspotIp}:${PORT}  (⚡ 1-5ms Hotspot!)`);
   console.log(`🛡️ TCP NoDelay & Sub-Millisecond Heartbeat Active`);
   console.log(`=======================================================`);
 });
