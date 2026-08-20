@@ -11,10 +11,14 @@ dist/
 *.a
 *.so
 .gradle/
-*.apk
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-project/app/build/
 *.aab
 
 # OS files
 .DS_Store
 Thumbs.db
 *.tmp
+.idea/
