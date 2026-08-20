@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0e14">
+  <meta name="theme-color" content="#070a0f">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700;800&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,600;0,700;0,800;1,700&family=Outfit:wght@400;600;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="app-root">
@@ -26,73 +26,222 @@
       </div>
     </div>
 
-    <!-- SCREEN 1: MAIN MENU & PRIVATE LOBBY CREATION -->
+    <!-- SCREEN 1: NATIVE AAA GAME LAUNCHER & TACTICAL WARZONE COMMAND HUB -->
     <div id="screen-main-menu" class="screen active">
-      <div class="menu-card glass-panel">
-        <div class="game-logo">
-          <span class="logo-tag">TACTICAL COMBAT WARZONE</span>
-          <h1>WEGETHER</h1>
-          <p class="logo-sub">AI SWARM SURVIVAL • MULTIPLAYER WARZONE</p>
-        </div>
+      <!-- Background Ambient Embers & Grid FX -->
+      <div class="menu-warzone-bg">
+        <div class="bg-vignette"></div>
+        <div class="bg-scanlines"></div>
+        <div class="bg-grid-overlay"></div>
+      </div>
 
-        <!-- High Score & Wave Record Badge -->
-        <div class="high-score-banner">
-          <div class="hs-item">
-            <span class="hs-label">🏆 BEST SCORE</span>
-            <span id="menu-high-score" class="hs-val">0 PTS</span>
-          </div>
-          <div class="hs-divider"></div>
-          <div class="hs-item">
-            <span class="hs-label">🌊 HIGHEST WAVE</span>
-            <span id="menu-highest-wave" class="hs-val">WAVE 1</span>
-          </div>
-        </div>
-
-        <div class="input-group">
-          <label for="player-nickname">YOUR CALLSIGN</label>
-          <input type="text" id="player-nickname" maxlength="14" placeholder="Enter Nickname" value="Commander">
-        </div>
-
-        <div class="menu-action-grid">
-          <!-- Primary Action 1: QUICK PLAY (AI CO-OP SWARM SURVIVAL) -->
-          <button id="btn-quick-play-swarm" class="btn btn-quick-play btn-large" type="button">
-            <span class="btn-icon">🤖</span>
-            <div class="btn-text">
-              <strong>QUICK PLAY (SWARM SURVIVAL)</strong>
-              <small>Fight monster bot armies with friendly AI companion</small>
+      <div class="game-launcher-layout">
+        <!-- 1. TOP GLOBAL COMMAND BAR -->
+        <header class="launcher-top-bar glass-panel">
+          <!-- Left: Player Profile Capsule -->
+          <div class="profile-capsule" id="btn-edit-profile">
+            <div class="profile-avatar-frame">
+              <span class="profile-avatar-icon">🪖</span>
+              <span class="profile-lvl-badge">24</span>
             </div>
-          </button>
-
-          <!-- Primary Action 2: PLAY WITH FRIENDS (OPENS MULTIPLAYER HUB) -->
-          <button id="btn-open-multiplayer-hub" class="btn btn-primary btn-large" type="button">
-            <span class="btn-icon">👥</span>
-            <div class="btn-text">
-              <strong>PLAY WITH FRIENDS</strong>
-              <small>Online Cloud, Local Hotspot, or LAN Wi-Fi</small>
+            <div class="profile-meta">
+              <div class="profile-name-row">
+                <span id="display-callsign" class="profile-name">Commander</span>
+                <span class="edit-callsign-icon">✏️</span>
+              </div>
+              <div class="profile-rank-progress">
+                <span class="rank-tag">SPEC-OPS VETERAN</span>
+                <div class="xp-bar-track"><div class="xp-bar-fill" style="width: 78%;"></div></div>
+              </div>
             </div>
+          </div>
+
+          <!-- Center: Best Score & Wave Badges -->
+          <div class="top-stat-badges">
+            <div class="stat-pill gold">
+              <span class="pill-icon">🏆</span>
+              <div class="pill-data">
+                <span class="pill-label">BEST SCORE</span>
+                <strong id="menu-high-score" class="pill-val">0 PTS</strong>
+              </div>
+            </div>
+            <div class="stat-pill cyan">
+              <span class="pill-icon">🌊</span>
+              <div class="pill-data">
+                <span class="pill-label">MAX WAVE</span>
+                <strong id="menu-highest-wave" class="pill-val">WAVE 1</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: System Actions & Audio -->
+          <div class="top-action-cluster">
+            <div class="stat-pill emerald" title="Warzone Combat Credits">
+              <span class="pill-icon">⚡</span>
+              <strong class="pill-val">1,250</strong>
+            </div>
+            <button id="btn-toggle-sfx" class="btn-icon-bar active" title="Toggle Sound Effects">
+              <span id="sfx-icon">🔊</span>
+            </button>
+            <button id="btn-open-settings" class="btn-icon-bar" title="Game Settings & Controls">
+              <span>⚙️</span>
+            </button>
+            <button id="btn-fullscreen-menu" class="btn-icon-bar" title="Toggle Fullscreen">
+              <span>⛶</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- 2. MAIN CENTER HERO CONTENT (SOLDIER SHOWCASE & GAME MODES) -->
+        <main class="launcher-main-grid">
+          <!-- LEFT HERO: SOLDIER ARMORY & LOADOUT SHOWCASE -->
+          <section class="soldier-showcase-panel glass-panel">
+            <div class="panel-header-compact">
+              <span class="panel-tag">OPERATIVE LOADOUT</span>
+              <span class="status-online-dot"></span>
+            </div>
+
+            <!-- Interactive Soldier Avatar Preview -->
+            <div class="soldier-canvas-wrap">
+              <canvas id="menu-soldier-canvas" width="160" height="180"></canvas>
+              <div class="soldier-platform-glow"></div>
+            </div>
+
+            <!-- Callsign Editor Input -->
+            <div class="callsign-input-wrapper">
+              <label for="player-nickname">TACTICAL CALLSIGN</label>
+              <div class="input-glow-box">
+                <input type="text" id="player-nickname" maxlength="14" placeholder="Enter Callsign" value="Commander">
+                <span class="input-status-icon">🛡️</span>
+              </div>
+            </div>
+
+            <!-- Skin Color Selector -->
+            <div class="skin-selector-group">
+              <span class="skin-label">COMBAT ARMOR COLOR</span>
+              <div class="color-palette-row">
+                <button class="color-swatch-btn active" data-color="#FF3366" style="--c: #FF3366;" title="Spec-Ops Red"></button>
+                <button class="color-swatch-btn" data-color="#00A2FF" style="--c: #00A2FF;" title="Cobalt Blue"></button>
+                <button class="color-swatch-btn" data-color="#FFD600" style="--c: #FFD600;" title="Desert Gold"></button>
+                <button class="color-swatch-btn" data-color="#00E676" style="--c: #00E676;" title="Emerald Guard"></button>
+                <button class="color-swatch-btn" data-color="#00E5FF" style="--c: #00E5FF;" title="Cyan Shock"></button>
+                <button class="color-swatch-btn" data-color="#D500F9" style="--c: #D500F9;" title="Cyber Violet"></button>
+              </div>
+            </div>
+
+            <!-- Weapon Loadout Mini Preview -->
+            <div class="quick-weapon-preview" id="btn-quick-armory">
+              <div class="wep-preview-info">
+                <span class="wep-category">PRIMARY WEAPON</span>
+                <strong id="menu-current-wep-name">DUAL SMG UZI</strong>
+              </div>
+              <span class="wep-inspect-icon">🔍</span>
+            </div>
+          </section>
+
+          <!-- RIGHT HERO: GAME MODE LAUNCH CARDS -->
+          <section class="game-modes-hub">
+            <!-- Hero Card 1: QUICK PLAY (AI SWARM SURVIVAL) -->
+            <div class="hero-mode-card swarm-card glass-panel" id="card-mode-swarm">
+              <div class="card-glow-bg"></div>
+              <div class="card-badge-row">
+                <span class="mode-badge red">🤖 CO-OP SURVIVAL</span>
+                <span class="mode-badge-sub">INFINITE HORDE DEFENSE</span>
+              </div>
+              <div class="card-content-body">
+                <div class="card-title-group">
+                  <h2>QUICK PLAY</h2>
+                  <span class="sub-h2">BOT SWARM SURVIVAL</span>
+                </div>
+                <p class="mode-desc">Fight escalating armies of cyber drones, arachnid stalkers, and giant titans alongside your high-tech AI companion <strong>Delta-1 Prime</strong>.</p>
+                <div class="card-feature-pills">
+                  <span>👾 5 Bot Types</span>
+                  <span>🛡️ AI Companion</span>
+                  <span>🎁 Tactical Loot Drops</span>
+                  <span>💾 Offline Saved</span>
+                </div>
+              </div>
+              <div class="card-action-footer">
+                <button id="btn-quick-play-swarm" class="btn btn-hero-deploy" type="button">
+                  <span class="btn-icon">🚀</span>
+                  <div class="btn-text">
+                    <strong>DEPLOY NOW</strong>
+                    <small>Instant 1-Tap Solo / Co-op Start</small>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Secondary Mode Row: Multiplayer & Local Hotspot/LAN -->
+            <div class="secondary-modes-grid">
+              <!-- Card 2: MULTIPLAYER WARZONE -->
+              <div class="hero-mode-card mp-card glass-panel" id="card-mode-mp">
+                <div class="card-badge-row">
+                  <span class="mode-badge blue">⚔️ COMPETITIVE</span>
+                  <span id="server-ping-pill" class="mode-badge-sub">🟢 ONLINE</span>
+                </div>
+                <div class="card-mini-body">
+                  <h3>PLAY WITH FRIENDS</h3>
+                  <p>Global 5-Digit Private Rooms, 1v1 Duels, 2v2 Squad TDM & FFA.</p>
+                </div>
+                <button id="btn-open-multiplayer-hub" class="btn btn-primary btn-block" type="button">
+                  <span>👥 MULTIPLAYER HUB</span>
+                </button>
+              </div>
+
+              <!-- Card 3: LOCAL HOTSPOT / LAN -->
+              <div class="hero-mode-card lan-card glass-panel" id="card-mode-lan">
+                <div class="card-badge-row">
+                  <span class="mode-badge gold">📡 LOCAL PLAY</span>
+                  <span class="mode-badge-sub">1-5ms PING</span>
+                </div>
+                <div class="card-mini-body">
+                  <h3>HOTSPOT & LAN</h3>
+                  <p>Play offline with friends using Mobile Hotspot or Local Wi-Fi.</p>
+                </div>
+                <button id="btn-quick-hotspot-direct" class="btn btn-hotspot btn-block" type="button">
+                  <span>⚡ 1-TAP JOIN HOTSPOT</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <!-- 3. BOTTOM TACTICAL COMMAND DOCK -->
+        <footer class="launcher-bottom-dock glass-panel">
+          <button id="dock-btn-armory" class="dock-item" type="button">
+            <span class="dock-icon">🔫</span>
+            <span class="dock-label">ARMORY</span>
           </button>
-        </div>
-
-        <!-- Connected Server Indicator -->
-        <div class="server-status-pill">
-          <span id="server-status-dot" class="status-indicator-dot"></span>
-          <span class="server-status-label">SERVER:</span>
-          <span id="connected-server-address" class="server-address-text">Connecting...</span>
-        </div>
-
-        <div class="quick-info-box">
-          <span>🚀 Infinite Jetpack • 🔍 [Shift] 1x-4x Zoom • 🎯 [Q/F] Grenade & Mines • 💥 [E] Equip Gun</span>
-        </div>
+          <button id="dock-btn-guide" class="dock-item" type="button">
+            <span class="dock-icon">🎮</span>
+            <span class="dock-label">CONTROLS</span>
+          </button>
+          <button id="dock-btn-settings" class="dock-item" type="button">
+            <span class="dock-icon">⚙️</span>
+            <span class="dock-label">SETTINGS</span>
+          </button>
+          <button id="dock-btn-records" class="dock-item" type="button">
+            <span class="dock-icon">🏆</span>
+            <span class="dock-label">RECORDS</span>
+          </button>
+          
+          <div class="dock-server-status">
+            <span id="server-status-dot" class="status-indicator-dot"></span>
+            <span class="dock-server-label">WARZONE SERVER:</span>
+            <span id="connected-server-address" class="dock-server-address">Connecting...</span>
+          </div>
+        </footer>
       </div>
     </div>
 
-    <!-- SCREEN 1.5: MULTIPLAYER HUB MODAL -->
+    <!-- MODAL: MULTIPLAYER HUB (ONLINE + LOCAL HOTSPOT / LAN) -->
     <div id="modal-multiplayer-hub" class="modal-backdrop hidden">
       <div class="hub-modal-card glass-panel">
         <div class="modal-header">
           <div class="modal-title-group">
-            <span class="modal-tag">MULTIPLAYER HUB</span>
-            <h2>CHOOSE GAME MODE</h2>
+            <span class="modal-tag">MULTIPLAYER WARZONE HUB</span>
+            <h2>CHOOSE COMBAT NETWORK</h2>
           </div>
           <button id="btn-close-mp-hub" class="btn-icon-small danger" type="button">✕</button>
         </div>
@@ -103,8 +252,8 @@
             <div class="mp-card-header">
               <span class="mp-icon">🌐</span>
               <div class="mp-card-info">
-                <h3>PLAY ONLINE (CLOUD)</h3>
-                <p>Global 5-digit private rooms for internet battles</p>
+                <h3>PLAY ONLINE (GLOBAL CLOUD)</h3>
+                <p>Private 5-digit room codes for cross-network internet battles</p>
               </div>
             </div>
             <div class="mp-card-actions">
@@ -123,8 +272,8 @@
             <div class="mp-card-header">
               <span class="mp-icon">📡</span>
               <div class="mp-card-info">
-                <h3>PLAY LOCAL (HOTSPOT / LAN)</h3>
-                <p>Zero internet required! 1-5ms pure LAN / Hotspot ping</p>
+                <h3>PLAY LOCAL (HOTSPOT / LAN WI-FI)</h3>
+                <p>Zero internet required! Connect directly with ultra-low 1-5ms ping.</p>
               </div>
             </div>
             <div class="mp-card-actions">
@@ -135,6 +284,115 @@
                 <span>📶 CONNECT TO CUSTOM LAN IP</span>
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: ARMORY & WEAPON LOADOUT -->
+    <div id="modal-armory" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel wide-modal">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-tag">TACTICAL ARSENAL</span>
+            <h2>WEAPON ARMORY & LOADOUTS</h2>
+          </div>
+          <button id="btn-close-armory" class="btn-icon-small danger" type="button">✕</button>
+        </div>
+
+        <div class="armory-weapons-grid">
+          <!-- Weapon 1: Dual SMG Uzi -->
+          <div class="armory-card">
+            <div class="armory-card-header">
+              <span class="wep-tier-tag common">STANDARD ISSUE</span>
+              <h3>DUAL SMG UZI</h3>
+            </div>
+            <div class="wep-stat-bars">
+              <div class="stat-row"><span>DAMAGE</span><div class="bar-bg"><div class="bar-fill" style="width: 45%;"></div></div></div>
+              <div class="stat-row"><span>FIRE RATE</span><div class="bar-bg"><div class="bar-fill" style="width: 95%;"></div></div></div>
+              <div class="stat-row"><span>RANGE</span><div class="bar-bg"><div class="bar-fill" style="width: 60%;"></div></div></div>
+            </div>
+            <p class="wep-desc">High-speed dual submachine guns with unlimited ammunition. Excellent for close-to-mid range suppression.</p>
+          </div>
+
+          <!-- Weapon 2: Combat Shotgun -->
+          <div class="armory-card">
+            <div class="armory-card-header">
+              <span class="wep-tier-tag uncommon">UNCOMMON</span>
+              <h3>COMBAT SHOTGUN</h3>
+            </div>
+            <div class="wep-stat-bars">
+              <div class="stat-row"><span>DAMAGE</span><div class="bar-bg"><div class="bar-fill" style="width: 90%;"></div></div></div>
+              <div class="stat-row"><span>FIRE RATE</span><div class="bar-bg"><div class="bar-fill" style="width: 35%;"></div></div></div>
+              <div class="stat-row"><span>RANGE</span><div class="bar-bg"><div class="bar-fill" style="width: 30%;"></div></div></div>
+            </div>
+            <p class="wep-desc">Heavy pump-action shotgun delivering a devastating 6-pellet kinetic spread at point-blank range.</p>
+          </div>
+
+          <!-- Weapon 3: Marksman Sniper -->
+          <div class="armory-card">
+            <div class="armory-card-header">
+              <span class="wep-tier-tag rare">RARE</span>
+              <h3>MARKSMAN SNIPER</h3>
+            </div>
+            <div class="wep-stat-bars">
+              <div class="stat-row"><span>DAMAGE</span><div class="bar-bg"><div class="bar-fill" style="width: 95%;"></div></div></div>
+              <div class="stat-row"><span>FIRE RATE</span><div class="bar-bg"><div class="bar-fill" style="width: 25%;"></div></div></div>
+              <div class="stat-row"><span>RANGE (4x ZOOM)</span><div class="bar-bg"><div class="bar-fill" style="width: 100%;"></div></div></div>
+            </div>
+            <p class="wep-desc">High-caliber precision sniper rifle with 4x optical scope zoom (Key: Shift). One-shot high kinetic impact.</p>
+          </div>
+
+          <!-- Weapon 4: RPG Bazooka -->
+          <div class="armory-card">
+            <div class="armory-card-header">
+              <span class="wep-tier-tag legendary">LEGENDARY</span>
+              <h3>BAZOOKA RPG</h3>
+            </div>
+            <div class="wep-stat-bars">
+              <div class="stat-row"><span>DAMAGE</span><div class="bar-bg"><div class="bar-fill" style="width: 100%;"></div></div></div>
+              <div class="stat-row"><span>FIRE RATE</span><div class="bar-bg"><div class="bar-fill" style="width: 15%;"></div></div></div>
+              <div class="stat-row"><span>BLAST RADIUS</span><div class="bar-bg"><div class="bar-fill" style="width: 95%;"></div></div></div>
+            </div>
+            <p class="wep-desc">Shoulder-launched high-explosive rocket launcher with 3x tactical zoom and massive area-of-effect blast damage.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: CONTROLS & HOW TO PLAY -->
+    <div id="modal-controls-guide" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-tag">TACTICAL MANUAL</span>
+            <h2>CONTROLS & COMBAT GUIDE</h2>
+          </div>
+          <button id="btn-close-controls" class="btn-icon-small danger" type="button">✕</button>
+        </div>
+
+        <div class="controls-guide-grid">
+          <div class="guide-col">
+            <h3>🖥️ DESKTOP KEYBOARD & MOUSE</h3>
+            <ul class="guide-list">
+              <li><kbd>W / A / S / D</kbd> Move & Upward Infinite Jetpack</li>
+              <li><kbd>MOUSE AIM</kbd> 360° Laser Aim Cursor</li>
+              <li><kbd>LEFT CLICK</kbd> Fire Active Weapon</li>
+              <li><kbd>SHIFT</kbd> Toggle 1x-4x Optical Scope Zoom</li>
+              <li><kbd>E</kbd> Equip Nearby Weapon Crates</li>
+              <li><kbd>Q</kbd> Cycle Throwable (Frag / Mine / Gas)</li>
+              <li><kbd>F</kbd> Throw Selected Tactical Item</li>
+            </ul>
+          </div>
+          <div class="guide-col">
+            <h3>📱 MOBILE TOUCHSCREEN</h3>
+            <ul class="guide-list">
+              <li><strong>Left Stick:</strong> Move & Ascend with Jetpack</li>
+              <li><strong>Right Stick:</strong> 360° Drag-to-Aim & Auto-Fire</li>
+              <li><strong>Zoom Button:</strong> 1-Tap 1x-4x Scope Zoom</li>
+              <li><strong>[E] Button:</strong> 1-Tap Equip Weapons</li>
+              <li><strong>Tactical Slot:</strong> 1-Tap Throw & Toggle</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -164,7 +422,7 @@
         <div id="host-settings-bar" class="host-controls">
           <span class="control-label">MATCH FORMAT:</span>
           <div class="mode-btn-group">
-            <button class="mode-select-btn active" data-mode="DUEL">⚔️ DUEL (FFA / 1v1 / 1v1v1)</button>
+            <button class="mode-select-btn active" data-mode="DUEL">⚔️ DUEL (FFA / 1v1)</button>
             <button class="mode-select-btn" data-mode="2v2">🛡️ 2v2 SQUAD TDM</button>
           </div>
         </div>
@@ -269,7 +527,7 @@
           </button>
 
           <button id="btn-fullscreen-toggle" class="btn-icon-small" title="Toggle Fullscreen">⛶</button>
-          <button id="btn-exit-game" class="btn-icon-small danger" title="Exit to Lobby">✕</button>
+          <button id="btn-exit-game" class="btn-icon-small danger" title="Exit to Main Menu">✕</button>
         </div>
       </div>
 
@@ -331,6 +589,8 @@
           <span class="joy-label" id="joy-right-label">AIM / DRAG TO FIRE</span>
         </div>
       </div>
+    </div>
+
     <!-- Toast Popup Notification -->
     <div id="toast-popup" class="toast-popup hidden">
       <div class="toast-content">

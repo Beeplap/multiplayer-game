@@ -50,6 +50,11 @@ class MultiplayerGameApp {
       waveDelayTimer: 0
     };
 
+    // ──────────────── AUDIO & CUSTOMIZATION ENGINE ────────────────
+    this.sfxEnabled = true;
+    this.audioCtx = null;
+    this.soldierColor = '#FF3366';
+
     this.initDOM();
     this.detectTouchDevice();
     this.loadAssets();
@@ -57,6 +62,144 @@ class MultiplayerGameApp {
     this.setupEventListeners();
     this.initGameCanvas();
     this.updateHighScoreUI();
+    this.initMenuSoldierCanvas();
+  }
+
+  // ──────────────── PROCEDURAL WEBAUDIO SOUND SYNTHESIZER ────────────────
+  initAudio() {
+    if (!this.audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        this.audioCtx = new AudioContextClass();
+      }
+    }
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+  }
+
+  playMenuClick() {
+    if (!this.sfxEnabled) return;
+    this.initAudio();
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(480, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.06);
+    } catch (e) {}
+  }
+
+  playShootSound(wep = 'uzi') {
+    if (!this.sfxEnabled) return;
+    this.initAudio();
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+
+      if (wep === 'uzi') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (wep === 'shotgun') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.22);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      } else if (wep === 'sniper') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(120, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.18);
+      } else if (wep === 'rpg') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(35, now + 0.35);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+    } catch (e) {}
+  }
+
+  playExplosionSound() {
+    if (!this.sfxEnabled) return;
+    this.initAudio();
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(90, now);
+      osc.frequency.exponentialRampToValueAtTime(20, now + 0.45);
+      gain.gain.setValueAtTime(0.38, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.45);
+    } catch (e) {}
+  }
+
+  playWaveClearSound() {
+    if (!this.sfxEnabled) return;
+    this.initAudio();
+    if (!this.audioCtx) return;
+    try {
+      const ctx = this.audioCtx;
+      const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        const now = ctx.currentTime + i * 0.09;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      });
+    } catch (e) {}
   }
 
   setGlow(ctx, color, blur) {
@@ -83,8 +226,11 @@ class MultiplayerGameApp {
     };
 
     this.modalMpHub = document.getElementById('modal-multiplayer-hub');
+    this.modalArmory = document.getElementById('modal-armory');
+    this.modalControls = document.getElementById('modal-controls-guide');
     this.menuHighScoreEl = document.getElementById('menu-high-score');
     this.menuHighestWaveEl = document.getElementById('menu-highest-wave');
+    this.displayCallsignEl = document.getElementById('display-callsign');
 
     this.swarmHudOverlay = document.getElementById('swarm-hud-overlay');
     this.hudMultiplayerScore = document.getElementById('hud-multiplayer-score');
@@ -131,6 +277,36 @@ class MultiplayerGameApp {
 
     this.serverAddressTextEl = document.getElementById('connected-server-address');
     this.serverStatusDotEl = document.getElementById('server-status-dot');
+  }
+
+  initMenuSoldierCanvas() {
+    this.menuSoldierCanvas = document.getElementById('menu-soldier-canvas');
+    if (this.menuSoldierCanvas) {
+      this.menuSoldierCtx = this.menuSoldierCanvas.getContext('2d');
+      this.renderMenuSoldier();
+    }
+  }
+
+  renderMenuSoldier() {
+    if (!this.menuSoldierCtx || !this.menuSoldierCanvas) return;
+    const ctx = this.menuSoldierCtx;
+    const W = this.menuSoldierCanvas.width;
+    const H = this.menuSoldierCanvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const dummySoldier = {
+      x: W / 2,
+      y: H / 2 + 10,
+      aimAngle: 0.15,
+      color: this.soldierColor || '#FF3366',
+      team: 'RED',
+      isFlying: false,
+      nickname: this.myNickname || 'Commander'
+    };
+
+    ctx.save();
+    this.drawArticulatedSoldier(ctx, dummySoldier, true, 0, 0);
+    ctx.restore();
   }
 
   updateHighScoreUI() {
@@ -421,6 +597,7 @@ class MultiplayerGameApp {
     const btnQuickPlay = document.getElementById('btn-quick-play-swarm');
     if (btnQuickPlay) {
       btnQuickPlay.addEventListener('click', () => {
+        this.playMenuClick();
         this.startQuickPlaySwarm();
       });
     }
@@ -430,19 +607,104 @@ class MultiplayerGameApp {
     const btnCloseMpHub = document.getElementById('btn-close-mp-hub');
     if (btnOpenMpHub && this.modalMpHub) {
       btnOpenMpHub.addEventListener('click', () => {
+        this.playMenuClick();
         this.modalMpHub.classList.remove('hidden');
       });
     }
     if (btnCloseMpHub && this.modalMpHub) {
       btnCloseMpHub.addEventListener('click', () => {
+        this.playMenuClick();
         this.modalMpHub.classList.add('hidden');
       });
     }
 
-    // 3. CREATE / JOIN CLOUD ROOMS
+    // 3. ARMORY & LOADOUT MODAL
+    const openArmory = () => {
+      this.playMenuClick();
+      if (this.modalArmory) this.modalArmory.classList.remove('hidden');
+    };
+    const dockArmory = document.getElementById('dock-btn-armory');
+    const quickArmory = document.getElementById('btn-quick-armory');
+    const closeArmory = document.getElementById('btn-close-armory');
+    if (dockArmory) dockArmory.addEventListener('click', openArmory);
+    if (quickArmory) quickArmory.addEventListener('click', openArmory);
+    if (closeArmory && this.modalArmory) {
+      closeArmory.addEventListener('click', () => {
+        this.playMenuClick();
+        this.modalArmory.classList.add('hidden');
+      });
+    }
+
+    // 4. CONTROLS GUIDE MODAL
+    const openControls = () => {
+      this.playMenuClick();
+      if (this.modalControls) this.modalControls.classList.remove('hidden');
+    };
+    const dockGuide = document.getElementById('dock-btn-guide');
+    const dockSettings = document.getElementById('dock-btn-settings');
+    const btnOpenSettings = document.getElementById('btn-open-settings');
+    const closeControls = document.getElementById('btn-close-controls');
+    if (dockGuide) dockGuide.addEventListener('click', openControls);
+    if (dockSettings) dockSettings.addEventListener('click', openControls);
+    if (btnOpenSettings) btnOpenSettings.addEventListener('click', openControls);
+    if (closeControls && this.modalControls) {
+      closeControls.addEventListener('click', () => {
+        this.playMenuClick();
+        this.modalControls.classList.add('hidden');
+      });
+    }
+
+    // 5. AUDIO SFX TOGGLE
+    const btnSfx = document.getElementById('btn-toggle-sfx');
+    const sfxIcon = document.getElementById('sfx-icon');
+    if (btnSfx) {
+      btnSfx.addEventListener('click', () => {
+        this.sfxEnabled = !this.sfxEnabled;
+        if (sfxIcon) sfxIcon.textContent = this.sfxEnabled ? '🔊' : '🔇';
+        btnSfx.classList.toggle('active', this.sfxEnabled);
+        if (this.sfxEnabled) this.playMenuClick();
+      });
+    }
+
+    // 6. SOLDIER COLOR PALETTE SWATCHES
+    document.querySelectorAll('.color-swatch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.playMenuClick();
+        document.querySelectorAll('.color-swatch-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.soldierColor = btn.dataset.color || '#FF3366';
+        this.localPlayer.color = this.soldierColor;
+        this.renderMenuSoldier();
+      });
+    });
+
+    // 7. CALLSIGN LIVE EDITING
+    if (this.nicknameInput) {
+      this.nicknameInput.addEventListener('input', () => {
+        const val = this.nicknameInput.value.trim() || 'Commander';
+        this.myNickname = val;
+        if (this.displayCallsignEl) this.displayCallsignEl.textContent = val;
+        this.renderMenuSoldier();
+      });
+    }
+
+    // 8. DIRECT HOTSPOT & LAN JOIN
+    const btnDirectHotspot = document.getElementById('btn-quick-hotspot-direct');
+    if (btnDirectHotspot) {
+      btnDirectHotspot.addEventListener('click', () => {
+        this.playMenuClick();
+        const targetHost = prompt('Enter Host Hotspot IP or port:', '192.168.43.1:3000');
+        if (targetHost) {
+          window.location.href = `http://${targetHost}`;
+        }
+      });
+    }
+
+    // 9. CREATE / JOIN CLOUD ROOMS
     const btnCreate = document.getElementById('btn-create-lobby');
     if (btnCreate) {
       btnCreate.addEventListener('click', () => {
+        this.playMenuClick();
         if (this.modalMpHub) this.modalMpHub.classList.add('hidden');
         const nickname = this.nicknameInput.value.trim() || 'Commander';
         this.send('SET_NICKNAME', { nickname });
@@ -453,6 +715,7 @@ class MultiplayerGameApp {
     const btnJoin = document.getElementById('btn-join-lobby');
     if (btnJoin) {
       btnJoin.addEventListener('click', () => {
+        this.playMenuClick();
         const code = this.joinCodeInput.value.trim().toUpperCase();
         if (code.length !== 5) {
           alert('Please enter a valid 5-digit room code!');
@@ -465,10 +728,11 @@ class MultiplayerGameApp {
       });
     }
 
-    // 4. HOTSPOT & LAN
+    // 10. HOTSPOT & LAN IN MODAL
     const btnHotspot = document.getElementById('btn-quick-hotspot-join');
     if (btnHotspot) {
       btnHotspot.addEventListener('click', () => {
+        this.playMenuClick();
         const targetHost = prompt('Enter Host Hotspot IP or port:', '192.168.43.1:3000');
         if (targetHost) {
           window.location.href = `http://${targetHost}`;
@@ -479,6 +743,7 @@ class MultiplayerGameApp {
     const btnLanAuto = document.getElementById('btn-join-lan-auto');
     if (btnLanAuto) {
       btnLanAuto.addEventListener('click', () => {
+        this.playMenuClick();
         const lanIp = prompt('Enter Host PC / Phone Wi-Fi IP (e.g. 192.168.1.5:3000):', '192.168.1.100:3000');
         if (lanIp) {
           window.location.href = `http://${lanIp}`;
@@ -487,6 +752,7 @@ class MultiplayerGameApp {
     }
 
     document.getElementById('btn-copy-code').addEventListener('click', () => {
+      this.playMenuClick();
       if (this.currentRoom) {
         navigator.clipboard.writeText(this.currentRoom.code).catch(() => {});
         this.showToast(
@@ -498,17 +764,21 @@ class MultiplayerGameApp {
     });
 
     document.getElementById('btn-join-red').addEventListener('click', () => {
+      this.playMenuClick();
       this.send('SET_TEAM', { team: 'RED' });
     });
     document.getElementById('btn-join-blue').addEventListener('click', () => {
+      this.playMenuClick();
       this.send('SET_TEAM', { team: 'BLUE' });
     });
 
     document.getElementById('btn-toggle-ready').addEventListener('click', () => {
+      this.playMenuClick();
       this.send('TOGGLE_READY');
     });
 
     this.btnStartMatch.addEventListener('click', () => {
+      this.playMenuClick();
       try {
         const el = document.documentElement;
         if (!document.fullscreenElement && !document.webkitFullscreenElement) {
@@ -520,11 +790,13 @@ class MultiplayerGameApp {
     });
 
     document.getElementById('btn-leave-lobby').addEventListener('click', () => {
+      this.playMenuClick();
       window.location.reload();
     });
 
     document.querySelectorAll('.mode-select-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        this.playMenuClick();
         if (!this.isHost) return;
         const mode = btn.dataset.mode;
         document.querySelectorAll('.mode-select-btn').forEach(b => b.classList.remove('active'));
@@ -534,6 +806,7 @@ class MultiplayerGameApp {
     });
 
     document.getElementById('btn-exit-game').addEventListener('click', () => {
+      this.playMenuClick();
       if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
       this.swarmNextWaveTimer = null;
       if (this.gameMode === 'SWARM_SURVIVAL') {
@@ -543,13 +816,15 @@ class MultiplayerGameApp {
         this.aiCompanion = null;
         this.showScreen('menu');
         this.updateHighScoreUI();
+        this.renderMenuSoldier();
       } else {
         this.showScreen('lobby');
       }
     });
 
-    // Fullscreen Toggle
+    // Fullscreen Toggles
     const toggleFullscreen = () => {
+      this.playMenuClick();
       const el = document.documentElement;
       if (!document.fullscreenElement && !document.webkitFullscreenElement) {
         if (el.requestFullscreen) el.requestFullscreen();
@@ -560,7 +835,9 @@ class MultiplayerGameApp {
       }
     };
     const fsBtn = document.getElementById('btn-fullscreen-toggle');
+    const fsMenuBtn = document.getElementById('btn-fullscreen-menu');
     if (fsBtn) fsBtn.addEventListener('click', toggleFullscreen);
+    if (fsMenuBtn) fsMenuBtn.addEventListener('click', toggleFullscreen);
 
     // Instant Touch Actions
     const bindTouchAction = (el, callback) => {
@@ -2322,16 +2599,17 @@ class MultiplayerGameApp {
     }
 
     // Swarm Mode: Explosions damage all hostile bots in radius
-    if (this.gameMode === 'SWARM_SURVIVAL') {
-      for (let j = this.swarmBots.length - 1; j >= 0; j--) {
-        const bot = this.swarmBots[j];
+    if (this.gameMode === 'SWARM_SURVIVAL' && this.swarmBots) {
+      for (const bot of this.swarmBots) {
+        if (bot.isDead) continue;
         const bDist = Math.hypot(bot.x - x, bot.y - y);
         if (bDist <= radius) {
           const dmg = Math.round(maxDamage * (1 - bDist / radius));
           bot.hp -= dmg;
           this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
           if (bot.hp <= 0) {
-            this.handleBotKill(j);
+            bot.isDead = true;
+            this.handleBotKill(bot);
           }
         }
       }
@@ -2357,6 +2635,14 @@ class MultiplayerGameApp {
     const p = this.localPlayer;
     const wep = this.currentWeapon;
 
+    // Trigger Sound Effect
+    this.playShootSound(wep);
+
+    // Haptic Vibration Feedback on Mobile Devices
+    if (navigator.vibrate) {
+      try { navigator.vibrate(wep === 'shotgun' || wep === 'rpg' ? 30 : 15); } catch (e) {}
+    }
+
     if (wep === 'uzi') {
       const bullet = {
         x: Math.round(p.x + Math.cos(p.aimAngle) * 26),
@@ -2367,7 +2653,7 @@ class MultiplayerGameApp {
         ownerId: this.myPlayerId,
         color: '#00E5FF',
         life: 0,
-        maxLife: 55 // Extended SMG bullet range (~1,045px mid-range tactical distance)
+        maxLife: 55
       };
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
@@ -2386,7 +2672,7 @@ class MultiplayerGameApp {
           ownerId: this.myPlayerId,
           color: '#FF7B00',
           life: 0,
-          maxLife: 18 // Decreased Shotgun range (~250px tight spread blast)
+          maxLife: 18
         };
         this.bullets.push(pellet);
         burst.push(pellet);
@@ -4655,6 +4941,7 @@ class MultiplayerGameApp {
         this.aiCompanion.y = this.localPlayer.y - 40;
       }
 
+      this.playWaveClearSound();
       this.showWaveBanner(`WAVE ${this.swarmState.wave} CLEARED!`, `+${waveBonus} BONUS PTS • NEXT WAVE INCOMING`);
 
       // Schedule next wave with timer tracking (prevents zombie timers)
