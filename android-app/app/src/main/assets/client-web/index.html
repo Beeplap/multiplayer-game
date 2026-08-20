@@ -30,14 +30,47 @@
     <div id="screen-main-menu" class="screen active">
       <div class="menu-card glass-panel">
         <div class="game-logo">
-          <span class="logo-tag">GLOBAL MULTIPLAYER</span>
+          <span class="logo-tag">TACTICAL COMBAT WARZONE</span>
           <h1>WEGETHER</h1>
-          <p class="logo-sub">NATURAL BATTLEFIELD • TACTICAL WARZONE</p>
+          <p class="logo-sub">AI SWARM SURVIVAL • MULTIPLAYER WARZONE</p>
+        </div>
+
+        <!-- High Score & Wave Record Badge -->
+        <div class="high-score-banner">
+          <div class="hs-item">
+            <span class="hs-label">🏆 BEST SCORE</span>
+            <span id="menu-high-score" class="hs-val">0 PTS</span>
+          </div>
+          <div class="hs-divider"></div>
+          <div class="hs-item">
+            <span class="hs-label">🌊 HIGHEST WAVE</span>
+            <span id="menu-highest-wave" class="hs-val">WAVE 1</span>
+          </div>
         </div>
 
         <div class="input-group">
           <label for="player-nickname">YOUR CALLSIGN</label>
           <input type="text" id="player-nickname" maxlength="14" placeholder="Enter Nickname" value="Commander">
+        </div>
+
+        <div class="menu-action-grid">
+          <!-- Primary Action 1: QUICK PLAY (AI CO-OP SWARM SURVIVAL) -->
+          <button id="btn-quick-play-swarm" class="btn btn-quick-play btn-large" type="button">
+            <span class="btn-icon">🤖</span>
+            <div class="btn-text">
+              <strong>QUICK PLAY (SWARM SURVIVAL)</strong>
+              <small>Fight monster bot armies with friendly AI companion</small>
+            </div>
+          </button>
+
+          <!-- Primary Action 2: PLAY WITH FRIENDS (OPENS MULTIPLAYER HUB) -->
+          <button id="btn-open-multiplayer-hub" class="btn btn-primary btn-large" type="button">
+            <span class="btn-icon">👥</span>
+            <div class="btn-text">
+              <strong>PLAY WITH FRIENDS</strong>
+              <small>Online Cloud, Local Hotspot, or LAN Wi-Fi</small>
+            </div>
+          </button>
         </div>
 
         <!-- Connected Server Indicator -->
@@ -47,36 +80,62 @@
           <span id="connected-server-address" class="server-address-text">Connecting...</span>
         </div>
 
-        <div class="menu-action-grid">
-          <button id="btn-create-lobby" class="btn btn-primary btn-large">
-            <span class="btn-icon">⚡</span>
-            <div class="btn-text">
-              <strong>CREATE PRIVATE LOBBY</strong>
-              <small>Generates 5-digit room code for friends</small>
-            </div>
-          </button>
+        <div class="quick-info-box">
+          <span>🚀 Infinite Jetpack • 🔍 [Shift] 1x-4x Zoom • 🎯 [Q/F] Grenade & Mines • 💥 [E] Equip Gun</span>
+        </div>
+      </div>
+    </div>
 
-          <div class="divider-text"><span>OR JOIN WITH 5-DIGIT CODE</span></div>
-
-          <div class="join-code-row">
-            <input type="text" id="join-code-input" maxlength="5" placeholder="5-DIGIT CODE" autocomplete="off" spellcheck="false">
-            <button id="btn-join-lobby" class="btn btn-accent">JOIN</button>
+    <!-- SCREEN 1.5: MULTIPLAYER HUB MODAL -->
+    <div id="modal-multiplayer-hub" class="modal-backdrop hidden">
+      <div class="hub-modal-card glass-panel">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <span class="modal-tag">MULTIPLAYER HUB</span>
+            <h2>CHOOSE GAME MODE</h2>
           </div>
-
-          <!-- Hotspot & Local LAN Mode -->
-          <div class="hotspot-connect-card">
-            <div class="hotspot-info-row">
-              <span class="hotspot-badge">📱 HOTSPOT / LAN</span>
-              <span id="hotspot-hint" class="hotspot-hint">Direct 1-5ms Local Play</span>
-            </div>
-            <button id="btn-quick-hotspot-join" class="btn btn-hotspot" type="button">
-              <span>⚡ JOIN HOTSPOT HOST (192.168.43.1)</span>
-            </button>
-          </div>
+          <button id="btn-close-mp-hub" class="btn-icon-small danger" type="button">✕</button>
         </div>
 
-        <div class="quick-info-box">
-          <span>🚀 Infinite Flight • 🔍 [Shift] 1x-4x Zoom • 🎯 [Q] Switch [F] Throw • 💥 [E] Equip Gun</span>
+        <div class="mp-options-grid">
+          <!-- Option 1: ONLINE MULTIPLAYER (CLOUD) -->
+          <div class="mp-option-card">
+            <div class="mp-card-header">
+              <span class="mp-icon">🌐</span>
+              <div class="mp-card-info">
+                <h3>PLAY ONLINE (CLOUD)</h3>
+                <p>Global 5-digit private rooms for internet battles</p>
+              </div>
+            </div>
+            <div class="mp-card-actions">
+              <button id="btn-create-lobby" class="btn btn-accent btn-block" type="button">
+                <span>⚡ CREATE 5-DIGIT ROOM</span>
+              </button>
+              <div class="join-code-row">
+                <input type="text" id="join-code-input" maxlength="5" placeholder="5-DIGIT CODE" autocomplete="off" spellcheck="false">
+                <button id="btn-join-lobby" class="btn btn-primary" type="button">JOIN</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Option 2: LOCAL HOTSPOT / LAN -->
+          <div class="mp-option-card highlight-orange">
+            <div class="mp-card-header">
+              <span class="mp-icon">📡</span>
+              <div class="mp-card-info">
+                <h3>PLAY LOCAL (HOTSPOT / LAN)</h3>
+                <p>Zero internet required! 1-5ms pure LAN / Hotspot ping</p>
+              </div>
+            </div>
+            <div class="mp-card-actions">
+              <button id="btn-quick-hotspot-join" class="btn btn-hotspot btn-block" type="button">
+                <span>⚡ JOIN HOST HOTSPOT (192.168.43.1)</span>
+              </button>
+              <button id="btn-join-lan-auto" class="btn btn-outline btn-block" type="button">
+                <span>📶 CONNECT TO CUSTOM LAN IP</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -167,11 +226,33 @@
           </div>
         </div>
 
-        <!-- Center Scoreboard -->
-        <div class="hud-center-score">
+        <!-- Center Scoreboard (Active in Multiplayer) -->
+        <div id="hud-multiplayer-score" class="hud-center-score">
           <div class="score-team red"><span id="score-red">0</span></div>
           <div class="score-sep">:</div>
           <div class="score-team blue"><span id="score-blue">0</span></div>
+        </div>
+
+        <!-- Center Swarm Survival HUD (Active in Swarm Mode) -->
+        <div id="swarm-hud-overlay" class="swarm-hud hidden">
+          <div class="swarm-badge wave-badge">
+            <span class="swarm-icon">🌊</span>
+            <span id="swarm-wave-num">WAVE 1</span>
+          </div>
+          <div class="swarm-badge bots-badge">
+            <span class="swarm-icon">👾</span>
+            <span id="swarm-bots-alive">BOTS: 0</span>
+          </div>
+          <div class="swarm-badge score-badge">
+            <span class="swarm-icon">🎯</span>
+            <span id="swarm-score-val">0 PTS</span>
+          </div>
+        </div>
+
+        <!-- Wave Announcement Banner -->
+        <div id="swarm-wave-banner" class="wave-announcement-banner hidden">
+          <h2 id="wave-banner-title">WAVE 1</h2>
+          <p id="wave-banner-subtitle">BOT SWARM INCOMING • DEFEND WITH AI COMPANION</p>
         </div>
 
         <!-- Top Right Weapon Status, Dynamic Zoom & Fullscreen -->

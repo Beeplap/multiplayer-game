@@ -349,24 +349,257 @@ input[type="text"]:focus {
   opacity: 0.85;
 }
 
-.btn-accent {
-  background: var(--accent-gold);
-  color: #000;
-  padding: 0 18px;
-  font-size: 14px;
+/* High Score & Wave Record Banner */
+.high-score-banner {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 214, 0, 0.3);
+  border-radius: 12px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid var(--panel-border);
-  padding: 10px 16px;
+.hs-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.quick-info-box {
+.hs-label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--accent-gold);
+  letter-spacing: 0.5px;
+}
+
+.hs-val {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 900;
+  color: #FFF;
+}
+
+.hs-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Quick Play Button */
+.btn-quick-play {
+  background: linear-gradient(135deg, #00E676 0%, #00B0FF 100%);
+  color: #FFF;
+  padding: 14px;
+  box-shadow: 0 6px 20px rgba(0, 230, 118, 0.35);
+}
+
+.btn-quick-play:hover {
+  filter: brightness(1.15);
+}
+
+/* ──────────────── MODAL BACKDROP & MULTIPLAYER HUB ──────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 14, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  padding: 16px;
+}
+
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.hub-modal-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.modal-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-tag {
+  font-family: var(--font-display);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 1px;
+}
+
+.modal-header h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+  color: #FFF;
+  margin: 0;
+}
+
+.mp-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mp-option-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mp-option-card.highlight-orange {
+  border-color: rgba(255, 123, 0, 0.4);
+  background: rgba(255, 123, 0, 0.06);
+}
+
+.mp-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mp-icon {
+  font-size: 24px;
+}
+
+.mp-card-info h3 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  color: #FFF;
+  margin: 0 0 2px 0;
+}
+
+.mp-card-info p {
+  font-size: 11px;
   color: var(--text-muted);
+  margin: 0;
+}
+
+.mp-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: var(--accent-cyan);
+  padding: 10px;
+  font-size: 11px;
+}
+
+.btn-outline:hover {
+  background: rgba(0, 229, 255, 0.1);
+}
+
+/* ──────────────── SWARM SURVIVAL IN-GAME HUD ──────────────── */
+.swarm-hud {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(11, 14, 20, 0.85);
+  border: 1px solid rgba(0, 230, 118, 0.35);
+  border-radius: 20px;
+  padding: 4px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+.swarm-hud.hidden {
+  display: none !important;
+}
+
+.swarm-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wave-badge {
+  color: #00E676;
+}
+
+.bots-badge {
+  color: #FF3366;
+}
+
+.score-badge {
+  color: #FFD600;
+}
+
+.wave-announcement-banner {
+  position: absolute;
+  top: 75px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(11, 14, 20, 0.92);
+  border: 2px solid #00E676;
+  border-radius: 12px;
+  padding: 10px 24px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(0, 230, 118, 0.4);
+  pointer-events: none;
+  animation: bannerFade 3.5s forwards ease-in-out;
+  z-index: 100;
+}
+
+.wave-announcement-banner.hidden {
+  display: none !important;
+}
+
+.wave-announcement-banner h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  color: #00E676;
+  margin: 0 0 2px 0;
+  letter-spacing: 1px;
+}
+
+.wave-announcement-banner p {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFF;
+  margin: 0;
+}
+
+@keyframes bannerFade {
+  0% { opacity: 0; transform: translate(-50%, -20px) scale(0.9); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -10px) scale(0.95); }
 }
 
 /* Connected Server Live Indicator */

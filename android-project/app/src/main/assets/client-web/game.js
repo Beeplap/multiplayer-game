@@ -36,12 +36,27 @@ class MultiplayerGameApp {
     this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 900;
     this.lastRenderedHp = -1;
 
+    // ──────────────── SWARM SURVIVAL & AI COMPANION ENGINE ────────────────
+    this.gameMode = 'MULTIPLAYER'; // 'MULTIPLAYER' | 'SWARM_SURVIVAL'
+    this.swarmBots = [];
+    this.aiCompanion = null;
+    this.swarmState = {
+      wave: 1,
+      score: 0,
+      highScore: parseInt(localStorage.getItem('wegether_highscore') || '0', 10),
+      highestWave: parseInt(localStorage.getItem('wegether_highest_wave') || '1', 10),
+      botsRemaining: 0,
+      waveActive: false,
+      waveDelayTimer: 0
+    };
+
     this.initDOM();
     this.detectTouchDevice();
     this.loadAssets();
     this.initWebSocket();
     this.setupEventListeners();
     this.initGameCanvas();
+    this.updateHighScoreUI();
   }
 
   setGlow(ctx, color, blur) {
@@ -66,6 +81,19 @@ class MultiplayerGameApp {
       lobby: document.getElementById('screen-lobby'),
       game: document.getElementById('screen-game')
     };
+
+    this.modalMpHub = document.getElementById('modal-multiplayer-hub');
+    this.menuHighScoreEl = document.getElementById('menu-high-score');
+    this.menuHighestWaveEl = document.getElementById('menu-highest-wave');
+
+    this.swarmHudOverlay = document.getElementById('swarm-hud-overlay');
+    this.hudMultiplayerScore = document.getElementById('hud-multiplayer-score');
+    this.swarmWaveNumEl = document.getElementById('swarm-wave-num');
+    this.swarmBotsAliveEl = document.getElementById('swarm-bots-alive');
+    this.swarmScoreValEl = document.getElementById('swarm-score-val');
+    this.swarmWaveBanner = document.getElementById('swarm-wave-banner');
+    this.waveBannerTitle = document.getElementById('wave-banner-title');
+    this.waveBannerSubtitle = document.getElementById('wave-banner-subtitle');
 
     this.nicknameInput = document.getElementById('player-nickname');
     this.joinCodeInput = document.getElementById('join-code-input');
@@ -103,6 +131,11 @@ class MultiplayerGameApp {
 
     this.serverAddressTextEl = document.getElementById('connected-server-address');
     this.serverStatusDotEl = document.getElementById('server-status-dot');
+  }
+
+  updateHighScoreUI() {
+    if (this.menuHighScoreEl) this.menuHighScoreEl.textContent = `${this.swarmState.highScore.toLocaleString()} PTS`;
+    if (this.menuHighestWaveEl) this.menuHighestWaveEl.textContent = `WAVE ${this.swarmState.highestWave}`;
   }
 
   loadAssets() {
@@ -382,31 +415,73 @@ class MultiplayerGameApp {
     }
   }
 
-  // ──────────────── LOBBY MANAGEMENT ────────────────
+  // ──────────────── LOBBY & GAME HUB MANAGEMENT ────────────────
   setupEventListeners() {
-    document.getElementById('btn-create-lobby').addEventListener('click', () => {
-      const nickname = this.nicknameInput.value.trim() || 'Commander';
-      this.send('SET_NICKNAME', { nickname });
-      this.send('CREATE_LOBBY', { mode: '2v2' });
-    });
+    // 1. QUICK PLAY SWARM SURVIVAL
+    const btnQuickPlay = document.getElementById('btn-quick-play-swarm');
+    if (btnQuickPlay) {
+      btnQuickPlay.addEventListener('click', () => {
+        this.startQuickPlaySwarm();
+      });
+    }
 
-    document.getElementById('btn-join-lobby').addEventListener('click', () => {
-      const code = this.joinCodeInput.value.trim().toUpperCase();
-      if (code.length !== 5) {
-        alert('Please enter a valid 5-digit room code!');
-        return;
-      }
-      const nickname = this.nicknameInput.value.trim() || 'Commander';
-      this.send('SET_NICKNAME', { nickname });
-      this.send('JOIN_LOBBY', { roomCode: code });
-    });
+    // 2. MULTIPLAYER HUB MODAL
+    const btnOpenMpHub = document.getElementById('btn-open-multiplayer-hub');
+    const btnCloseMpHub = document.getElementById('btn-close-mp-hub');
+    if (btnOpenMpHub && this.modalMpHub) {
+      btnOpenMpHub.addEventListener('click', () => {
+        this.modalMpHub.classList.remove('hidden');
+      });
+    }
+    if (btnCloseMpHub && this.modalMpHub) {
+      btnCloseMpHub.addEventListener('click', () => {
+        this.modalMpHub.classList.add('hidden');
+      });
+    }
 
+    // 3. CREATE / JOIN CLOUD ROOMS
+    const btnCreate = document.getElementById('btn-create-lobby');
+    if (btnCreate) {
+      btnCreate.addEventListener('click', () => {
+        if (this.modalMpHub) this.modalMpHub.classList.add('hidden');
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.send('CREATE_LOBBY', { mode: '2v2' });
+      });
+    }
+
+    const btnJoin = document.getElementById('btn-join-lobby');
+    if (btnJoin) {
+      btnJoin.addEventListener('click', () => {
+        const code = this.joinCodeInput.value.trim().toUpperCase();
+        if (code.length !== 5) {
+          alert('Please enter a valid 5-digit room code!');
+          return;
+        }
+        if (this.modalMpHub) this.modalMpHub.classList.add('hidden');
+        const nickname = this.nicknameInput.value.trim() || 'Commander';
+        this.send('SET_NICKNAME', { nickname });
+        this.send('JOIN_LOBBY', { roomCode: code });
+      });
+    }
+
+    // 4. HOTSPOT & LAN
     const btnHotspot = document.getElementById('btn-quick-hotspot-join');
     if (btnHotspot) {
       btnHotspot.addEventListener('click', () => {
         const targetHost = prompt('Enter Host Hotspot IP or port:', '192.168.43.1:3000');
         if (targetHost) {
           window.location.href = `http://${targetHost}`;
+        }
+      });
+    }
+
+    const btnLanAuto = document.getElementById('btn-join-lan-auto');
+    if (btnLanAuto) {
+      btnLanAuto.addEventListener('click', () => {
+        const lanIp = prompt('Enter Host PC / Phone Wi-Fi IP (e.g. 192.168.1.5:3000):', '192.168.1.100:3000');
+        if (lanIp) {
+          window.location.href = `http://${lanIp}`;
         }
       });
     }
@@ -459,7 +534,15 @@ class MultiplayerGameApp {
     });
 
     document.getElementById('btn-exit-game').addEventListener('click', () => {
-      this.showScreen('lobby');
+      if (this.gameMode === 'SWARM_SURVIVAL') {
+        this.gameMode = 'MULTIPLAYER';
+        this.swarmBots = [];
+        this.aiCompanion = null;
+        this.showScreen('menu');
+        this.updateHighScoreUI();
+      } else {
+        this.showScreen('lobby');
+      }
     });
 
     // Fullscreen Toggle
@@ -1133,7 +1216,137 @@ class MultiplayerGameApp {
     }
   }
 
+  // ──────────────── SWARM SURVIVAL & AI COMPANION SYSTEM ────────────────
+  startQuickPlaySwarm() {
+    this.gameMode = 'SWARM_SURVIVAL';
+    this.showScreen('game');
+    this.buildNaturalMap();
+
+    // Configure Swarm Survival HUD
+    if (this.swarmHudOverlay) this.swarmHudOverlay.classList.remove('hidden');
+    if (this.hudMultiplayerScore) this.hudMultiplayerScore.classList.add('hidden');
+
+    const p = this.localPlayer;
+    p.id = this.myPlayerId || 'P_LOCAL';
+    p.hp = 100;
+    p.isDead = false;
+    p.x = 1600;
+    p.y = 900;
+    p.vx = 0;
+    p.vy = 0;
+    p.team = 'BLUE';
+    p.color = '#00A2FF';
+    p.inventory = { grenades: 3, mines: 2, toxic_gas: 2 };
+    this.currentWeapon = 'uzi';
+    this.activeThrowable = 'grenade';
+    this.updateTacticalHUD();
+    this.setZoomLevel(0);
+
+    // Initialize Friendly AI Companion Drone ("Delta-1")
+    this.aiCompanion = {
+      id: 'COMPANION_DELTA1',
+      name: 'DELTA-1 (AI CO-OP)',
+      x: 1540,
+      y: 860,
+      vx: 0,
+      vy: 0,
+      hp: 250,
+      maxHp: 250,
+      aimAngle: 0,
+      facingLeft: false,
+      lastShootTime: 0,
+      lastGrenadeTime: 0,
+      shieldActive: true,
+      hoverOffset: 0,
+      isDead: false
+    };
+
+    // Reset Swarm State
+    this.swarmState.wave = 1;
+    this.swarmState.score = 0;
+    this.swarmState.waveActive = true;
+    this.swarmState.waveDelayTimer = 0;
+    this.swarmBots = [];
+    this.bullets = [];
+    this.grenades = [];
+    this.landmines = [];
+    this.toxicClouds = [];
+
+    this.updateSwarmHUD();
+    this.startSwarmWave(1);
+
+    this.showToast('AI CO-OP SWARM SURVIVAL', 'Delta-1 AI Companion deployed! Defend against bot swarms.', '🤖');
+  }
+
+  updateSwarmHUD() {
+    if (this.swarmWaveNumEl) this.swarmWaveNumEl.textContent = `WAVE ${this.swarmState.wave}`;
+    if (this.swarmBotsAliveEl) this.swarmBotsAliveEl.textContent = `BOTS: ${this.swarmBots.length}`;
+    if (this.swarmScoreValEl) this.swarmScoreValEl.textContent = `${this.swarmState.score.toLocaleString()} PTS`;
+  }
+
+  showWaveBanner(title, subtitle) {
+    if (!this.swarmWaveBanner) return;
+    if (this.waveBannerTitle) this.waveBannerTitle.textContent = title;
+    if (this.waveBannerSubtitle) this.waveBannerSubtitle.textContent = subtitle;
+    this.swarmWaveBanner.classList.remove('hidden');
+    this.swarmWaveBanner.style.animation = 'none';
+    void this.swarmWaveBanner.offsetWidth;
+    this.swarmWaveBanner.style.animation = 'bannerFade 3.5s forwards ease-in-out';
+    setTimeout(() => {
+      if (this.swarmWaveBanner) this.swarmWaveBanner.classList.add('hidden');
+    }, 3600);
+  }
+
+  startSwarmWave(waveNum) {
+    this.swarmState.wave = waveNum;
+    this.swarmState.waveActive = true;
+    this.swarmState.waveDelayTimer = 0;
+
+    const botCount = 4 + waveNum * 2;
+    this.showWaveBanner(`WAVE ${waveNum}`, `SWARM INCOMING • ${botCount} HOSTILE BOTS DETECTED`);
+
+    this.swarmBots = [];
+    for (let i = 0; i < botCount; i++) {
+      const spawnLeft = Math.random() < 0.5;
+      const x = spawnLeft ? 150 + Math.random() * 600 : 2800 + Math.random() * 600;
+      const y = 300 + Math.random() * 450;
+
+      const type = (i % 2 === 0) ? 'CYBER_DRONE' : (i % 3 === 0 && waveNum >= 3) ? 'HEAVY_BOT' : 'INSECTOID_WALKER';
+      const hp = type === 'HEAVY_BOT' ? (200 + waveNum * 30) : type === 'CYBER_DRONE' ? (60 + waveNum * 12) : (45 + waveNum * 10);
+      const speed = type === 'INSECTOID_WALKER' ? (3.8 + Math.min(2.5, waveNum * 0.2)) : (2.4 + Math.min(2.0, waveNum * 0.15));
+
+      this.swarmBots.push({
+        id: `bot_${waveNum}_${i}`,
+        type,
+        x,
+        y,
+        vx: 0,
+        vy: 0,
+        hp,
+        maxHp: hp,
+        speed,
+        aimAngle: 0,
+        facingLeft: false,
+        shootCooldown: Math.floor(Math.random() * 60),
+        meleeCooldown: 0,
+        jumpCooldown: 0,
+        animFrame: Math.random() * 100,
+        hoverSeed: Math.random() * 1000,
+        isPouncing: false
+      });
+    }
+
+    this.updateSwarmHUD();
+  }
+
   startInGameMatch(matchData) {
+    this.gameMode = 'MULTIPLAYER';
+    this.swarmBots = [];
+    this.aiCompanion = null;
+
+    if (this.swarmHudOverlay) this.swarmHudOverlay.classList.add('hidden');
+    if (this.hudMultiplayerScore) this.hudMultiplayerScore.classList.remove('hidden');
+
     this.showScreen('game');
     this.buildNaturalMap();
 
@@ -1683,11 +1896,35 @@ class MultiplayerGameApp {
       }
 
       // 3. Swept Raycast against Local Player Hitbox
-      if (b.ownerId !== this.myPlayerId && p.hp > 0 && !p.isDead) {
+      if (b.ownerId !== this.myPlayerId && b.ownerId !== 'COMPANION' && p.hp > 0 && !p.isDead) {
         const hitPlayer = this.rayIntersectCircle(x0, y0, x1, y1, p.x, p.y, soldierRadius + 3);
         if (hitPlayer && (!closestHit || hitPlayer.t < closestHit.t)) {
           closestHit = hitPlayer;
           hitType = 'PLAYER';
+        }
+      }
+
+      // 3.5. Swept Raycast against Swarm Bots & AI Companion in Swarm Mode
+      if (this.gameMode === 'SWARM_SURVIVAL') {
+        // Player & Companion bullets hitting enemy swarm bots
+        if (b.ownerId === this.myPlayerId || b.ownerId === 'COMPANION') {
+          for (let j = this.swarmBots.length - 1; j >= 0; j--) {
+            const bot = this.swarmBots[j];
+            const hitBot = this.rayIntersectCircle(x0, y0, x1, y1, bot.x, bot.y, 22);
+            if (hitBot && (!closestHit || hitBot.t < closestHit.t)) {
+              closestHit = hitBot;
+              hitType = 'SWARM_BOT';
+              b.hitBotIndex = j;
+            }
+          }
+        }
+        // Enemy bot bullets hitting Friendly AI Companion
+        else if (b.isBotBullet && this.aiCompanion && !this.aiCompanion.isDead) {
+          const hitComp = this.rayIntersectCircle(x0, y0, x1, y1, this.aiCompanion.x, this.aiCompanion.y, 22);
+          if (hitComp && (!closestHit || hitComp.t < closestHit.t)) {
+            closestHit = hitComp;
+            hitType = 'COMPANION';
+          }
         }
       }
 
@@ -1702,15 +1939,30 @@ class MultiplayerGameApp {
         } else if (hitType === 'PLAYER') {
           let dmg;
           if (b.weapon === 'sniper') dmg = 70;
-          else if (b.weapon === 'uzi') dmg = b.life < 16 ? 18 : 12;
+          else if (b.weapon === 'uzi') dmg = b.life < 28 ? 18 : 14;
           else if (b.weapon === 'shotgun') dmg = b.life < 8 ? 15 : 7;
-          else dmg = 16;
+          else dmg = b.damage || 14;
 
           p.hp = Math.max(0, p.hp - dmg);
           this.spawnImpactSparks(b.x, b.y, '#FF3366');
 
           if (p.hp <= 0) {
             this.triggerLocalDeath(b.ownerId, b.weapon);
+          }
+        } else if (hitType === 'SWARM_BOT' && b.hitBotIndex !== undefined && this.swarmBots[b.hitBotIndex]) {
+          const targetBot = this.swarmBots[b.hitBotIndex];
+          const dmg = b.weapon === 'sniper' ? 85 : b.weapon === 'rpg' ? 120 : b.weapon === 'shotgun' ? 24 : 18;
+          targetBot.hp -= dmg;
+          this.spawnImpactSparks(b.x, b.y, '#FFD600');
+          if (targetBot.hp <= 0) {
+            this.handleBotKill(b.hitBotIndex);
+          }
+        } else if (hitType === 'COMPANION' && this.aiCompanion) {
+          this.aiCompanion.hp = Math.max(0, this.aiCompanion.hp - (b.damage || 10));
+          this.spawnImpactSparks(b.x, b.y, '#00E5FF');
+          if (this.aiCompanion.hp <= 0) {
+            this.aiCompanion.isDead = true;
+            this.showToast('COMPANION OFFLINE', 'Delta-1 was destroyed! Rebooting next wave.', '⚠️');
           }
         }
 
@@ -1722,8 +1974,8 @@ class MultiplayerGameApp {
       b.x = x1;
       b.y = y1;
 
-      // Range Expiration (Bazooka / Sniper = 78, SMG = 32, Shotgun = 18)
-      const maxLife = b.maxLife || (b.weapon === 'shotgun' ? 18 : b.weapon === 'uzi' ? 32 : 78);
+      // Range Expiration (Bazooka / Sniper = 78, SMG = 55, Shotgun = 18)
+      const maxLife = b.maxLife || (b.weapon === 'shotgun' ? 18 : b.weapon === 'uzi' ? 55 : 78);
       if (b.x < 0 || b.x > this.worldWidth || b.y < 0 || b.y > this.worldHeight + 200 || b.life > maxLife) {
         if (b.life > maxLife && (b.weapon === 'shotgun' || b.weapon === 'uzi')) {
           this.spawnImpactSparks(b.x, b.y, b.color);
@@ -1923,6 +2175,9 @@ class MultiplayerGameApp {
       notif.alpha -= 0.02;
       if (notif.alpha <= 0) this.pickupNotifications.splice(i, 1);
     }
+
+    // ──────────────── SWARM SURVIVAL PHYSICS DISPATCHER ────────────────
+    this.updateSwarmPhysics();
   }
 
   addPickupNotification(text, color) {
@@ -1954,8 +2209,26 @@ class MultiplayerGameApp {
     if (dist <= radius && p.hp > 0 && !p.isDead) {
       const dmg = Math.round(maxDamage * (1 - dist / radius));
       p.hp = Math.max(0, p.hp - dmg);
+      this.spawnImpactSparks(p.x, p.y, '#FF3366');
+
       if (p.hp <= 0) {
-        this.triggerLocalDeath(attackerId, 'EXPLOSIVE');
+        this.triggerLocalDeath(attackerId, 'EXPLOSION');
+      }
+    }
+
+    // Swarm Mode: Explosions damage all hostile bots in radius
+    if (this.gameMode === 'SWARM_SURVIVAL') {
+      for (let j = this.swarmBots.length - 1; j >= 0; j--) {
+        const bot = this.swarmBots[j];
+        const bDist = Math.hypot(bot.x - x, bot.y - y);
+        if (bDist <= radius) {
+          const dmg = Math.round(maxDamage * (1 - bDist / radius));
+          bot.hp -= dmg;
+          this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
+          if (bot.hp <= 0) {
+            this.handleBotKill(j);
+          }
+        }
       }
     }
   }
@@ -1983,13 +2256,13 @@ class MultiplayerGameApp {
       const bullet = {
         x: Math.round(p.x + Math.cos(p.aimAngle) * 26),
         y: Math.round(p.y + Math.sin(p.aimAngle) * 26),
-        vx: Math.round(Math.cos(p.aimAngle) * 17 * 10) / 10,
-        vy: Math.round(Math.sin(p.aimAngle) * 17 * 10) / 10,
+        vx: Math.round(Math.cos(p.aimAngle) * 19 * 10) / 10,
+        vy: Math.round(Math.sin(p.aimAngle) * 19 * 10) / 10,
         weapon: 'uzi',
         ownerId: this.myPlayerId,
         color: '#00E5FF',
         life: 0,
-        maxLife: 32 // Decreased SMG bullet range (~540px effective CQB distance)
+        maxLife: 55 // Extended SMG bullet range (~1,045px mid-range tactical distance)
       };
       this.bullets.push(bullet);
       this.send('BULLET_FIRE', bullet);
@@ -2241,12 +2514,32 @@ class MultiplayerGameApp {
       ctx.restore();
     }
 
-    // 10. Remote Soldiers
+    // 10. Remote Soldiers (Multiplayer Mode)
     this.remotePlayers.forEach(rp => {
       if (!rp.isDead && rp.hp > 0 && rp.x >= visLeft - 60 && rp.x <= visRight + 60) {
         this.drawArticulatedSoldier(ctx, rp, false, rp.walkCycle || 0, 0);
       }
     });
+
+    // 10.5. Friendly AI Companion Drone ("Delta-1") in Swarm Survival Mode
+    if (this.gameMode === 'SWARM_SURVIVAL' && this.aiCompanion && !this.aiCompanion.isDead) {
+      if (this.aiCompanion.x >= visLeft - 60 && this.aiCompanion.x <= visRight + 60) {
+        this.drawAICompanion(ctx, this.aiCompanion);
+      }
+    }
+
+    // 10.6. Hostile Bot Swarm Army (Cyber Drones & Insectoid Stalkers)
+    if (this.gameMode === 'SWARM_SURVIVAL' && this.swarmBots) {
+      for (const bot of this.swarmBots) {
+        if (bot.x >= visLeft - 60 && bot.x <= visRight + 60) {
+          if (bot.type === 'CYBER_DRONE' || bot.type === 'HEAVY_BOT') {
+            this.drawCyberDrone(ctx, bot, false);
+          } else if (bot.type === 'INSECTOID_WALKER') {
+            this.drawInsectoidStalker(ctx, bot);
+          }
+        }
+      }
+    }
 
     // 11. Local Soldier
     if (!this.localPlayer.isDead && this.localPlayer.hp > 0) {
@@ -2257,7 +2550,8 @@ class MultiplayerGameApp {
       ctx.fillStyle = '#FF3366';
       this.setGlow(ctx, '#FF3366', 10);
       ctx.textAlign = 'center';
-      ctx.fillText(`💀 ELIMINATED • RESPAWNING IN ${Math.max(1, this.respawnTimer)}s...`, this.localPlayer.x, this.localPlayer.y - 20);
+      const statusText = this.gameMode === 'SWARM_SURVIVAL' ? `💀 FALLEN IN SWARM SURVIVAL • TAP QUICK PLAY TO RESTART` : `💀 ELIMINATED • RESPAWNING IN ${Math.max(1, this.respawnTimer)}s...`;
+      ctx.fillText(statusText, this.localPlayer.x, this.localPlayer.y - 20);
       ctx.restore();
     }
 
@@ -3815,6 +4109,472 @@ class MultiplayerGameApp {
     ctx.shadowBlur = 0;
     ctx.strokeStyle = '#101417';
     ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ──────────────── SWARM BOT COMBAT & 3D PROCEDURAL RENDERING ────────────────
+
+  handleBotKill(index) {
+    if (index < 0 || index >= this.swarmBots.length) return;
+    const bot = this.swarmBots[index];
+    this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
+    this.createExplosion(bot.x, bot.y, 45, 45, 'LOCAL_EXPLODE');
+
+    // Score based on type
+    const scoreVal = bot.type === 'HEAVY_BOT' ? 350 : bot.type === 'INSECTOID_WALKER' ? 150 : 100;
+    this.swarmState.score += scoreVal;
+
+    // Check & Save High Score
+    if (this.swarmState.score > this.swarmState.highScore) {
+      this.swarmState.highScore = this.swarmState.score;
+      localStorage.setItem('wegether_highscore', this.swarmState.highScore.toString());
+      this.updateHighScoreUI();
+    }
+
+    // 42% Chance to drop tactical loot
+    if (Math.random() < 0.42) {
+      const lootTypes = ['shotgun', 'sniper', 'rpg'];
+      const chosenWeapon = lootTypes[Math.floor(Math.random() * lootTypes.length)];
+      const names = { shotgun: 'COMBAT SHOTGUN', sniper: 'MARKSMAN SNIPER', rpg: 'BAZOOKA' };
+      this.droppedGuns.push({
+        id: `drop_${Date.now()}_${Math.random()}`,
+        x: bot.x,
+        y: bot.y - 10,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -4 - Math.random() * 3,
+        type: chosenWeapon,
+        name: names[chosenWeapon],
+        rarity: chosenWeapon === 'rpg' ? 'LEGENDARY' : chosenWeapon === 'sniper' ? 'RARE' : 'UNCOMMON',
+        available: true,
+        stuck: false
+      });
+      this.addPickupNotification(`+LOOT DROP: ${names[chosenWeapon]}`, '#FFD600');
+    }
+
+    this.swarmBots.splice(index, 1);
+    this.updateSwarmHUD();
+
+    // Check if Wave Cleared!
+    if (this.swarmBots.length === 0 && this.swarmState.waveActive) {
+      this.swarmState.waveActive = false;
+      const waveBonus = this.swarmState.wave * 500;
+      this.swarmState.score += waveBonus;
+      if (this.swarmState.wave > this.swarmState.highestWave) {
+        this.swarmState.highestWave = this.swarmState.wave;
+        localStorage.setItem('wegether_highest_wave', this.swarmState.highestWave.toString());
+        this.updateHighScoreUI();
+      }
+      this.updateSwarmHUD();
+
+      // Revive AI Companion if down
+      if (this.aiCompanion && this.aiCompanion.isDead) {
+        this.aiCompanion.isDead = false;
+        this.aiCompanion.hp = this.aiCompanion.maxHp;
+        this.aiCompanion.x = this.localPlayer.x - 60;
+        this.aiCompanion.y = this.localPlayer.y - 40;
+      }
+
+      this.showWaveBanner(`WAVE ${this.swarmState.wave} CLEARED!`, `+${waveBonus} BONUS PTS • NEXT WAVE INCOMING`);
+
+      // Schedule next wave
+      setTimeout(() => {
+        if (this.gameMode === 'SWARM_SURVIVAL' && !this.localPlayer.isDead) {
+          this.startSwarmWave(this.swarmState.wave + 1);
+        }
+      }, 3800);
+    }
+  }
+
+  updateSwarmPhysics() {
+    if (this.gameMode !== 'SWARM_SURVIVAL') return;
+    const p = this.localPlayer;
+    const now = Date.now();
+
+    // ──────────────── 1. UPDATE FRIENDLY AI COMPANION ("DELTA-1") ────────────────
+    if (this.aiCompanion && !this.aiCompanion.isDead) {
+      const comp = this.aiCompanion;
+      comp.hoverOffset = Math.sin(now * 0.004) * 6;
+
+      // Target position slightly behind and above player
+      const targetX = p.x + (p.facingLeft ? 75 : -75);
+      const targetY = p.y - 45 + comp.hoverOffset;
+
+      // Smooth Spring Tether Physics
+      comp.vx = (targetX - comp.x) * 0.08;
+      comp.vy = (targetY - comp.y) * 0.08;
+      comp.x += comp.vx;
+      comp.y += comp.vy;
+
+      // Find Closest Hostile Bot
+      let closestBot = null;
+      let minDist = 750;
+      for (const bot of this.swarmBots) {
+        const d = Math.hypot(bot.x - comp.x, bot.y - comp.y);
+        if (d < minDist) {
+          minDist = d;
+          closestBot = bot;
+        }
+      }
+
+      if (closestBot) {
+        comp.aimAngle = Math.atan2(closestBot.y - comp.y, closestBot.x - comp.x);
+        comp.facingLeft = Math.cos(comp.aimAngle) < 0;
+
+        // Auto Fire Suppression Laser Bursts (Every 180ms)
+        if (now - comp.lastShootTime > 180) {
+          comp.lastShootTime = now;
+          const bSpeed = 24.0;
+          const spread = (Math.random() - 0.5) * 0.06;
+          const angle = comp.aimAngle + spread;
+
+          this.bullets.push({
+            id: `b_comp_${now}_${Math.random()}`,
+            ownerId: 'COMPANION',
+            x: comp.x + Math.cos(angle) * 18,
+            y: comp.y + Math.sin(angle) * 18,
+            vx: Math.cos(angle) * bSpeed,
+            vy: Math.sin(angle) * bSpeed,
+            weapon: 'uzi',
+            color: '#00E5FF',
+            life: 0,
+            maxLife: 55
+          });
+        }
+
+        // Defensive Frag Grenade Deployment if Swarmed (3+ bots near player within 200px)
+        let botsNearPlayer = 0;
+        for (const b of this.swarmBots) {
+          if (Math.hypot(b.x - p.x, b.y - p.y) < 200) botsNearPlayer++;
+        }
+        if (botsNearPlayer >= 3 && now - comp.lastGrenadeTime > 8000) {
+          comp.lastGrenadeTime = now;
+          const gAngle = Math.atan2(closestBot.y - comp.y, closestBot.x - comp.x);
+          this.grenades.push({
+            id: `g_comp_${now}`,
+            ownerId: 'COMPANION',
+            team: 'BLUE',
+            x: comp.x,
+            y: comp.y,
+            vx: Math.cos(gAngle) * 14,
+            vy: Math.sin(gAngle) * 14 - 3,
+            timer: 70
+          });
+          this.showToast('DELTA-1 CALLOUT', 'Deploying tactical defensive frag grenade! Take cover!', '🛡️');
+        }
+      }
+    }
+
+    // ──────────────── 2. UPDATE HOSTILE SWARM BOTS ────────────────
+    for (let i = this.swarmBots.length - 1; i >= 0; i--) {
+      const bot = this.swarmBots[i];
+      bot.animFrame += 0.25;
+
+      const targetX = p.x;
+      const targetY = p.y;
+      const distToPlayer = Math.hypot(targetX - bot.x, targetY - bot.y);
+
+      bot.aimAngle = Math.atan2(targetY - bot.y, targetX - bot.x);
+      bot.facingLeft = Math.cos(bot.aimAngle) < 0;
+
+      // ── A. CYBER DRONE (Hovering Ranged Gunner) ──
+      if (bot.type === 'CYBER_DRONE' || bot.type === 'HEAVY_BOT') {
+        const hoverY = targetY - 140 + Math.sin(bot.hoverSeed + now * 0.003) * 50;
+        const desiredDist = bot.type === 'HEAVY_BOT' ? 220 : 280;
+
+        // Smooth flight navigation
+        if (distToPlayer > desiredDist) {
+          bot.vx += (Math.cos(bot.aimAngle) * bot.speed - bot.vx) * 0.05;
+          bot.vy += (Math.sin(bot.aimAngle) * bot.speed - bot.vy) * 0.05;
+        } else if (distToPlayer < desiredDist - 80) {
+          bot.vx -= (Math.cos(bot.aimAngle) * bot.speed * 0.6 + bot.vx) * 0.05;
+          bot.vy += ((hoverY - bot.y) * 0.04 - bot.vy) * 0.05;
+        } else {
+          bot.vy += ((hoverY - bot.y) * 0.05 - bot.vy) * 0.05;
+          bot.vx *= 0.95;
+        }
+
+        bot.x += bot.vx;
+        bot.y += bot.vy;
+
+        // Ranged Plasma Burst Shooting
+        bot.shootCooldown--;
+        if (bot.shootCooldown <= 0 && distToPlayer < 650) {
+          bot.shootCooldown = bot.type === 'HEAVY_BOT' ? 75 : 55;
+          const bSpeed = 16.0;
+          const color = bot.type === 'HEAVY_BOT' ? '#FF5722' : '#FFD600';
+
+          this.bullets.push({
+            id: `b_bot_${now}_${Math.random()}`,
+            ownerId: 'BOT',
+            isBotBullet: true,
+            x: bot.x + Math.cos(bot.aimAngle) * 20,
+            y: bot.y + Math.sin(bot.aimAngle) * 20,
+            vx: Math.cos(bot.aimAngle) * bSpeed,
+            vy: Math.sin(bot.aimAngle) * bSpeed,
+            damage: bot.type === 'HEAVY_BOT' ? 18 : 10,
+            weapon: 'uzi',
+            color,
+            life: 0,
+            maxLife: 60
+          });
+        }
+      }
+
+      // ── B. INSECTOID WALKER (Melee Pounce Stalker) ──
+      else if (bot.type === 'INSECTOID_WALKER') {
+        const groundY = this.getGroundYAt(bot.x);
+        const onGround = bot.y >= groundY - 26;
+
+        bot.jumpCooldown--;
+        bot.meleeCooldown--;
+
+        // Ground walking physics
+        const dir = targetX > bot.x ? 1 : -1;
+        if (onGround) {
+          bot.y = groundY - 24;
+          bot.vy = 0;
+          bot.vx = dir * bot.speed;
+
+          // Leap / Pounce attack if within range
+          if (distToPlayer < 180 && bot.jumpCooldown <= 0 && targetY < bot.y + 40) {
+            bot.jumpCooldown = 90;
+            bot.isPouncing = true;
+            bot.vx = dir * (bot.speed * 2.2);
+            bot.vy = -9.5;
+          }
+        } else {
+          // In-air gravity
+          bot.vy += 0.42;
+          bot.vx *= 0.98;
+          if (bot.y >= groundY - 24) {
+            bot.y = groundY - 24;
+            bot.vy = 0;
+            bot.isPouncing = false;
+          }
+        }
+
+        bot.x += bot.vx;
+        bot.y += bot.vy;
+
+        // Melee Claw Slash Attack on Player Contact (Within 36px)
+        if (distToPlayer < 36 && bot.meleeCooldown <= 0 && !p.isDead) {
+          bot.meleeCooldown = 35;
+          const slashDmg = 16 + Math.floor(this.swarmState.wave * 1.5);
+          p.hp = Math.max(0, p.hp - slashDmg);
+          this.spawnImpactSparks(p.x, p.y, '#FF3366');
+          p.vx += dir * 6; // Knockback
+          p.vy -= 3;
+
+          if (p.hp <= 0) {
+            this.triggerLocalDeath('SWARM_BOT', 'melee');
+            this.showToast('FALLEN IN COMBAT', `Overrun by Bot Swarm at Wave ${this.swarmState.wave}! Final Score: ${this.swarmState.score}`, '💀');
+          }
+        }
+      }
+
+      // World Boundary Clamping
+      bot.x = Math.max(80, Math.min(this.worldWidth - 80, bot.x));
+      bot.y = Math.max(60, Math.min(this.worldHeight - 80, bot.y));
+    }
+  }
+
+  // 3. 3D Procedural Cyber Drone (Yellow/Black Floating Sphere with Blue Glowing Eye & Wing Guns)
+  drawCyberDrone(ctx, drone, isFriendly = false) {
+    ctx.save();
+    ctx.translate(drone.x, drone.y);
+
+    const facingLeft = drone.facingLeft;
+    if (facingLeft) ctx.scale(-1, 1);
+
+    // Jet Exhaust Flame
+    const flameSize = 6 + Math.sin(Date.now() * 0.02) * 3;
+    const flameGrad = ctx.createLinearGradient(0, 10, 0, 10 + flameSize * 2);
+    flameGrad.addColorStop(0, isFriendly ? '#00E5FF' : '#FFD600');
+    flameGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(-6, 12);
+    ctx.lineTo(6, 12);
+    ctx.lineTo(0, 14 + flameSize * 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Side Cannon Wings (Black Chassis with Gun Barrels)
+    ctx.fillStyle = '#1E232A';
+    ctx.strokeStyle = '#0F1318';
+    ctx.lineWidth = 2;
+
+    // Upper & Lower Wing Struts
+    ctx.fillRect(-26, -6, 12, 12);
+    ctx.strokeRect(-26, -6, 12, 12);
+    ctx.fillRect(14, -6, 12, 12);
+    ctx.strokeRect(14, -6, 12, 12);
+
+    // Twin Rotary Gun Barrels
+    ctx.fillStyle = '#455A64';
+    ctx.fillRect(24, -4, 10, 3);
+    ctx.fillRect(24, 1, 10, 3);
+
+    // Main Spherical Casing (Outer Shell)
+    const shellColor = isFriendly ? '#00E5FF' : (drone.type === 'HEAVY_BOT' ? '#FF5722' : '#FFB300');
+    const coreGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, 18);
+    coreGrad.addColorStop(0, shellColor);
+    coreGrad.addColorStop(0.7, isFriendly ? '#0097A7' : (drone.type === 'HEAVY_BOT' ? '#D84315' : '#FF8F00'));
+    coreGrad.addColorStop(1, '#1A1D24');
+
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#101418';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Center Armor Band (Black Inset Segment)
+    ctx.fillStyle = '#21252D';
+    ctx.fillRect(-6, -16, 12, 32);
+    ctx.strokeStyle = '#0E1116';
+    ctx.strokeRect(-6, -16, 12, 32);
+
+    // Glowing Central Optical Camera Eye (Blue Iris with Lens Flare)
+    const eyeColor = isFriendly ? '#76FF03' : '#00E5FF';
+    this.setGlow(ctx, eyeColor, 12);
+    ctx.fillStyle = eyeColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner Pupil & Lens Highlight
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(2, -2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    this.setGlow(ctx, '#000', 0);
+
+    // Health Bar
+    const hpRatio = Math.max(0, drone.hp / drone.maxHp);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(-18, -26, 36, 5);
+    ctx.fillStyle = isFriendly ? '#00E676' : '#FF3366';
+    ctx.fillRect(-17, -25, 34 * hpRatio, 3);
+
+    ctx.restore();
+  }
+
+  // 4. 3D Procedural Insectoid Stalker (Red/Maroon Alien Walker with Multi-Ocular Eyes & Scythe Legs)
+  drawInsectoidStalker(ctx, stalker) {
+    ctx.save();
+    ctx.translate(stalker.x, stalker.y);
+
+    const facingLeft = stalker.facingLeft;
+    if (facingLeft) ctx.scale(-1, 1);
+
+    const walk = Math.sin(stalker.animFrame) * 8;
+
+    // 1. Articulated Scythe Insectoid Legs (4 Spindly Scythe Limbs)
+    ctx.strokeStyle = '#4A121A';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Back Left Leg
+    ctx.beginPath();
+    ctx.moveTo(-6, 2);
+    ctx.lineTo(-24 - walk, -10);
+    ctx.lineTo(-32 - walk * 0.5, 20);
+    ctx.stroke();
+
+    // Front Left Leg
+    ctx.beginPath();
+    ctx.moveTo(6, 2);
+    ctx.lineTo(22 + walk, -8);
+    ctx.lineTo(28 + walk * 0.8, 20);
+    ctx.stroke();
+
+    // Middle Legs
+    ctx.beginPath();
+    ctx.moveTo(-2, 4);
+    ctx.lineTo(-14 + walk * 0.7, -14);
+    ctx.lineTo(-20 + walk * 0.5, 22);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(2, 4);
+    ctx.lineTo(14 - walk * 0.7, -14);
+    ctx.lineTo(18 - walk * 0.5, 22);
+    ctx.stroke();
+
+    // Glowing Scythe Blade Tips
+    this.setGlow(ctx, '#FF1744', 8);
+    ctx.fillStyle = '#FF1744';
+    ctx.beginPath();
+    ctx.arc(-32 - walk * 0.5, 20, 2.5, 0, Math.PI * 2);
+    ctx.arc(28 + walk * 0.8, 20, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    this.setGlow(ctx, '#000', 0);
+
+    // 2. Main Crimson Carapace Dome Head
+    const headGrad = ctx.createLinearGradient(0, -18, 0, 10);
+    headGrad.addColorStop(0, '#D50000');
+    headGrad.addColorStop(0.6, '#B71C1C');
+    headGrad.addColorStop(1, '#3E0A10');
+
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.ellipse(0, -2, 22, 11, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#260408';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Dark Lower Mandible Rim
+    ctx.fillStyle = '#1A0407';
+    ctx.beginPath();
+    ctx.ellipse(2, 4, 16, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Multi-Ocular Glowing White Sensor Eyes (Cluster of 4 Eyes)
+    this.setGlow(ctx, '#FFFFFF', 6);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(6, -3, 3, 0, Math.PI * 2);
+    ctx.arc(13, -2, 3.5, 0, Math.PI * 2);
+    ctx.arc(18, -1, 2.5, 0, Math.PI * 2);
+    ctx.arc(10, 3, 2, 0, Math.PI * 2);
+    ctx.fill();
+    this.setGlow(ctx, '#000', 0);
+
+    // Health Bar
+    const hpRatio = Math.max(0, stalker.hp / stalker.maxHp);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(-16, -22, 32, 4);
+    ctx.fillStyle = '#FF1744';
+    ctx.fillRect(-15, -21, 30 * hpRatio, 2.5);
+
+    ctx.restore();
+  }
+
+  // 5. Friendly AI Companion Drone ("Delta-1")
+  drawAICompanion(ctx, comp) {
+    ctx.save();
+    // Cyan Shield Orbit Ring
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(comp.x, comp.y, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw Drone Base Model
+    this.drawCyberDrone(ctx, comp, true);
+
+    // AI Companion Callsign
+    ctx.font = 'bold 10px "Chakra Petch", sans-serif';
+    ctx.fillStyle = '#00E5FF';
+    ctx.textAlign = 'center';
+    ctx.fillText('DELTA-1 [AI]', comp.x, comp.y - 30);
 
     ctx.restore();
   }
