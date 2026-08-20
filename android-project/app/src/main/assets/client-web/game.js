@@ -1309,14 +1309,34 @@ class MultiplayerGameApp {
     for (let i = 0; i < botCount; i++) {
       const spawnLeft = Math.random() < 0.5;
       const x = spawnLeft ? 150 + Math.random() * 600 : 2800 + Math.random() * 600;
-      const y = 300 + Math.random() * 450;
+      const y = 250 + Math.random() * 500;
 
-      const type = (i % 2 === 0) ? 'CYBER_DRONE' : (i % 3 === 0 && waveNum >= 3) ? 'HEAVY_BOT' : 'INSECTOID_WALKER';
-      const hp = type === 'HEAVY_BOT' ? (200 + waveNum * 30) : type === 'CYBER_DRONE' ? (60 + waveNum * 12) : (45 + waveNum * 10);
-      const speed = type === 'INSECTOID_WALKER' ? (3.8 + Math.min(2.5, waveNum * 0.2)) : (2.4 + Math.min(2.0, waveNum * 0.15));
+      // Dynamic bot class selection based on wave progression
+      let type = 'CYBER_DRONE';
+      if (i % 3 === 0) {
+        type = 'INSECTOID_WALKER';
+      } else if (i % 4 === 0 && waveNum >= 2) {
+        type = 'PHANTOM_SLICER';
+      } else if (i === botCount - 1 && waveNum >= 3) {
+        type = 'GOLIATH_MECH';
+      }
+
+      let hp = 65 + waveNum * 15;
+      let speed = 2.6 + Math.min(2.5, waveNum * 0.18);
+
+      if (type === 'GOLIATH_MECH') {
+        hp = 250 + waveNum * 50;
+        speed = 1.8 + Math.min(1.5, waveNum * 0.1);
+      } else if (type === 'PHANTOM_SLICER') {
+        hp = 40 + waveNum * 10;
+        speed = 4.2 + Math.min(3.0, waveNum * 0.22);
+      } else if (type === 'INSECTOID_WALKER') {
+        hp = 55 + waveNum * 12;
+        speed = 3.6 + Math.min(2.5, waveNum * 0.2);
+      }
 
       this.swarmBots.push({
-        id: `bot_${waveNum}_${i}`,
+        id: `bot_${waveNum}_${i}_${Date.now()}`,
         type,
         x,
         y,
@@ -1327,12 +1347,13 @@ class MultiplayerGameApp {
         speed,
         aimAngle: 0,
         facingLeft: false,
-        shootCooldown: Math.floor(Math.random() * 60),
+        shootCooldown: Math.floor(Math.random() * 50),
         meleeCooldown: 0,
         jumpCooldown: 0,
         animFrame: Math.random() * 100,
         hoverSeed: Math.random() * 1000,
-        isPouncing: false
+        isPouncing: false,
+        isDead: false
       });
     }
 
@@ -1955,7 +1976,8 @@ class MultiplayerGameApp {
           targetBot.hp -= dmg;
           this.spawnImpactSparks(b.x, b.y, '#FFD600');
           if (targetBot.hp <= 0) {
-            this.handleBotKill(b.hitBotIndex);
+            targetBot.isDead = true;
+            this.handleBotKill(targetBot);
           }
         } else if (hitType === 'COMPANION' && this.aiCompanion) {
           this.aiCompanion.hp = Math.max(0, this.aiCompanion.hp - (b.damage || 10));
@@ -2521,21 +2543,25 @@ class MultiplayerGameApp {
       }
     });
 
-    // 10.5. Friendly AI Companion Drone ("Delta-1") in Swarm Survival Mode
+    // 10.5. Friendly AI Companion Drone ("Delta-1 Prime") in Swarm Survival Mode
     if (this.gameMode === 'SWARM_SURVIVAL' && this.aiCompanion && !this.aiCompanion.isDead) {
-      if (this.aiCompanion.x >= visLeft - 60 && this.aiCompanion.x <= visRight + 60) {
-        this.drawAICompanion(ctx, this.aiCompanion);
+      if (this.aiCompanion.x >= visLeft - 70 && this.aiCompanion.x <= visRight + 70) {
+        this.drawAICompanionPrime(ctx, this.aiCompanion);
       }
     }
 
-    // 10.6. Hostile Bot Swarm Army (Cyber Drones & Insectoid Stalkers)
+    // 10.6. Hostile Bot Swarm Army (Apex Cyber Drones, Crimson Arachnids, Phantom Slicers & Goliath Mechs)
     if (this.gameMode === 'SWARM_SURVIVAL' && this.swarmBots) {
       for (const bot of this.swarmBots) {
-        if (bot.x >= visLeft - 60 && bot.x <= visRight + 60) {
-          if (bot.type === 'CYBER_DRONE' || bot.type === 'HEAVY_BOT') {
-            this.drawCyberDrone(ctx, bot, false);
+        if (!bot.isDead && bot.x >= visLeft - 70 && bot.x <= visRight + 70) {
+          if (bot.type === 'CYBER_DRONE') {
+            this.drawApexCyberDrone(ctx, bot, false);
           } else if (bot.type === 'INSECTOID_WALKER') {
-            this.drawInsectoidStalker(ctx, bot);
+            this.drawCrimsonArachnid(ctx, bot);
+          } else if (bot.type === 'PHANTOM_SLICER') {
+            this.drawPhantomSlicer(ctx, bot);
+          } else if (bot.type === 'HEAVY_BOT' || bot.type === 'GOLIATH_MECH') {
+            this.drawGoliathMech(ctx, bot);
           }
         }
       }
@@ -4115,29 +4141,32 @@ class MultiplayerGameApp {
 
   // ──────────────── SWARM BOT COMBAT & 3D PROCEDURAL RENDERING ────────────────
 
-  handleBotKill(index) {
-    if (index < 0 || index >= this.swarmBots.length) return;
-    const bot = this.swarmBots[index];
-    this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
-    this.createExplosion(bot.x, bot.y, 45, 45, 'LOCAL_EXPLODE');
+  handleBotKill(bot) {
+    if (!bot || bot.killedHandled) return;
+    bot.killedHandled = true;
+    bot.isDead = true;
 
-    // Score based on type
-    const scoreVal = bot.type === 'HEAVY_BOT' ? 350 : bot.type === 'INSECTOID_WALKER' ? 150 : 100;
+    // Visual impact sparks & particle burst (damageBots = false to prevent recursion)
+    this.spawnImpactSparks(bot.x, bot.y, '#FFD600');
+    this.createExplosion(bot.x, bot.y, 45, 0, 'LOCAL_EXPLODE', false);
+
+    // Score based on bot class
+    const scoreVal = bot.type === 'GOLIATH_MECH' ? 500 : bot.type === 'HEAVY_BOT' ? 350 : bot.type === 'PHANTOM_SLICER' ? 200 : bot.type === 'INSECTOID_WALKER' ? 150 : 100;
     this.swarmState.score += scoreVal;
 
-    // Check & Save High Score
+    // Check & Save High Score persistently
     if (this.swarmState.score > this.swarmState.highScore) {
       this.swarmState.highScore = this.swarmState.score;
       localStorage.setItem('wegether_highscore', this.swarmState.highScore.toString());
       this.updateHighScoreUI();
     }
 
-    // 42% Chance to drop tactical loot
-    if (Math.random() < 0.42) {
+    // 45% Chance to drop tactical loot
+    if (Math.random() < 0.45 && this.groundGuns && Array.isArray(this.groundGuns)) {
       const lootTypes = ['shotgun', 'sniper', 'rpg'];
       const chosenWeapon = lootTypes[Math.floor(Math.random() * lootTypes.length)];
       const names = { shotgun: 'COMBAT SHOTGUN', sniper: 'MARKSMAN SNIPER', rpg: 'BAZOOKA' };
-      this.droppedGuns.push({
+      this.groundGuns.push({
         id: `drop_${Date.now()}_${Math.random()}`,
         x: bot.x,
         y: bot.y - 10,
@@ -4151,39 +4180,6 @@ class MultiplayerGameApp {
       });
       this.addPickupNotification(`+LOOT DROP: ${names[chosenWeapon]}`, '#FFD600');
     }
-
-    this.swarmBots.splice(index, 1);
-    this.updateSwarmHUD();
-
-    // Check if Wave Cleared!
-    if (this.swarmBots.length === 0 && this.swarmState.waveActive) {
-      this.swarmState.waveActive = false;
-      const waveBonus = this.swarmState.wave * 500;
-      this.swarmState.score += waveBonus;
-      if (this.swarmState.wave > this.swarmState.highestWave) {
-        this.swarmState.highestWave = this.swarmState.wave;
-        localStorage.setItem('wegether_highest_wave', this.swarmState.highestWave.toString());
-        this.updateHighScoreUI();
-      }
-      this.updateSwarmHUD();
-
-      // Revive AI Companion if down
-      if (this.aiCompanion && this.aiCompanion.isDead) {
-        this.aiCompanion.isDead = false;
-        this.aiCompanion.hp = this.aiCompanion.maxHp;
-        this.aiCompanion.x = this.localPlayer.x - 60;
-        this.aiCompanion.y = this.localPlayer.y - 40;
-      }
-
-      this.showWaveBanner(`WAVE ${this.swarmState.wave} CLEARED!`, `+${waveBonus} BONUS PTS • NEXT WAVE INCOMING`);
-
-      // Schedule next wave
-      setTimeout(() => {
-        if (this.gameMode === 'SWARM_SURVIVAL' && !this.localPlayer.isDead) {
-          this.startSwarmWave(this.swarmState.wave + 1);
-        }
-      }, 3800);
-    }
   }
 
   updateSwarmPhysics() {
@@ -4191,25 +4187,26 @@ class MultiplayerGameApp {
     const p = this.localPlayer;
     const now = Date.now();
 
-    // ──────────────── 1. UPDATE FRIENDLY AI COMPANION ("DELTA-1") ────────────────
+    // ──────────────── 1. UPDATE FRIENDLY AI COMPANION ("DELTA-1 PRIME") ────────────────
     if (this.aiCompanion && !this.aiCompanion.isDead) {
       const comp = this.aiCompanion;
       comp.hoverOffset = Math.sin(now * 0.004) * 6;
 
-      // Target position slightly behind and above player
-      const targetX = p.x + (p.facingLeft ? 75 : -75);
-      const targetY = p.y - 45 + comp.hoverOffset;
+      // Tether to position slightly behind and above player
+      const targetX = p.x + (p.facingLeft ? 80 : -80);
+      const targetY = p.y - 50 + comp.hoverOffset;
 
       // Smooth Spring Tether Physics
-      comp.vx = (targetX - comp.x) * 0.08;
-      comp.vy = (targetY - comp.y) * 0.08;
+      comp.vx = (targetX - comp.x) * 0.09;
+      comp.vy = (targetY - comp.y) * 0.09;
       comp.x += comp.vx;
       comp.y += comp.vy;
 
       // Find Closest Hostile Bot
       let closestBot = null;
-      let minDist = 750;
+      let minDist = 800;
       for (const bot of this.swarmBots) {
+        if (bot.isDead) continue;
         const d = Math.hypot(bot.x - comp.x, bot.y - comp.y);
         if (d < minDist) {
           minDist = d;
@@ -4221,18 +4218,18 @@ class MultiplayerGameApp {
         comp.aimAngle = Math.atan2(closestBot.y - comp.y, closestBot.x - comp.x);
         comp.facingLeft = Math.cos(comp.aimAngle) < 0;
 
-        // Auto Fire Suppression Laser Bursts (Every 180ms)
-        if (now - comp.lastShootTime > 180) {
+        // Auto Fire Gatling Pulse Laser Bursts (Every 160ms)
+        if (now - comp.lastShootTime > 160) {
           comp.lastShootTime = now;
           const bSpeed = 24.0;
-          const spread = (Math.random() - 0.5) * 0.06;
+          const spread = (Math.random() - 0.5) * 0.05;
           const angle = comp.aimAngle + spread;
 
           this.bullets.push({
             id: `b_comp_${now}_${Math.random()}`,
             ownerId: 'COMPANION',
-            x: comp.x + Math.cos(angle) * 18,
-            y: comp.y + Math.sin(angle) * 18,
+            x: comp.x + Math.cos(angle) * 22,
+            y: comp.y + Math.sin(angle) * 22,
             vx: Math.cos(angle) * bSpeed,
             vy: Math.sin(angle) * bSpeed,
             weapon: 'uzi',
@@ -4242,12 +4239,12 @@ class MultiplayerGameApp {
           });
         }
 
-        // Defensive Frag Grenade Deployment if Swarmed (3+ bots near player within 200px)
+        // Defensive Cluster Frag Grenade Deployment if Swarmed (3+ bots near player within 220px)
         let botsNearPlayer = 0;
         for (const b of this.swarmBots) {
-          if (Math.hypot(b.x - p.x, b.y - p.y) < 200) botsNearPlayer++;
+          if (!b.isDead && Math.hypot(b.x - p.x, b.y - p.y) < 220) botsNearPlayer++;
         }
-        if (botsNearPlayer >= 3 && now - comp.lastGrenadeTime > 8000) {
+        if (botsNearPlayer >= 3 && now - comp.lastGrenadeTime > 7500) {
           comp.lastGrenadeTime = now;
           const gAngle = Math.atan2(closestBot.y - comp.y, closestBot.x - comp.x);
           this.grenades.push({
@@ -4260,14 +4257,15 @@ class MultiplayerGameApp {
             vy: Math.sin(gAngle) * 14 - 3,
             timer: 70
           });
-          this.showToast('DELTA-1 CALLOUT', 'Deploying tactical defensive frag grenade! Take cover!', '🛡️');
+          this.showToast('DELTA-1 PRIME', 'Deploying tactical defensive frag grenade! Take cover!', '🛡️');
         }
       }
     }
 
     // ──────────────── 2. UPDATE HOSTILE SWARM BOTS ────────────────
-    for (let i = this.swarmBots.length - 1; i >= 0; i--) {
+    for (let i = 0; i < this.swarmBots.length; i++) {
       const bot = this.swarmBots[i];
+      if (bot.isDead) continue;
       bot.animFrame += 0.25;
 
       const targetX = p.x;
@@ -4277,12 +4275,11 @@ class MultiplayerGameApp {
       bot.aimAngle = Math.atan2(targetY - bot.y, targetX - bot.x);
       bot.facingLeft = Math.cos(bot.aimAngle) < 0;
 
-      // ── A. CYBER DRONE (Hovering Ranged Gunner) ──
-      if (bot.type === 'CYBER_DRONE' || bot.type === 'HEAVY_BOT') {
-        const hoverY = targetY - 140 + Math.sin(bot.hoverSeed + now * 0.003) * 50;
-        const desiredDist = bot.type === 'HEAVY_BOT' ? 220 : 280;
+      // ── A. APEX CYBER DRONE (Hovering Ranged Gunner) ──
+      if (bot.type === 'CYBER_DRONE') {
+        const hoverY = targetY - 140 + Math.sin(bot.hoverSeed + now * 0.003) * 55;
+        const desiredDist = 260;
 
-        // Smooth flight navigation
         if (distToPlayer > desiredDist) {
           bot.vx += (Math.cos(bot.aimAngle) * bot.speed - bot.vx) * 0.05;
           bot.vy += (Math.sin(bot.aimAngle) * bot.speed - bot.vy) * 0.05;
@@ -4297,24 +4294,21 @@ class MultiplayerGameApp {
         bot.x += bot.vx;
         bot.y += bot.vy;
 
-        // Ranged Plasma Burst Shooting
+        // Ranged Plasma Burst
         bot.shootCooldown--;
         if (bot.shootCooldown <= 0 && distToPlayer < 650) {
-          bot.shootCooldown = bot.type === 'HEAVY_BOT' ? 75 : 55;
-          const bSpeed = 16.0;
-          const color = bot.type === 'HEAVY_BOT' ? '#FF5722' : '#FFD600';
-
+          bot.shootCooldown = 55;
           this.bullets.push({
             id: `b_bot_${now}_${Math.random()}`,
             ownerId: 'BOT',
             isBotBullet: true,
-            x: bot.x + Math.cos(bot.aimAngle) * 20,
-            y: bot.y + Math.sin(bot.aimAngle) * 20,
-            vx: Math.cos(bot.aimAngle) * bSpeed,
-            vy: Math.sin(bot.aimAngle) * bSpeed,
-            damage: bot.type === 'HEAVY_BOT' ? 18 : 10,
+            x: bot.x + Math.cos(bot.aimAngle) * 22,
+            y: bot.y + Math.sin(bot.aimAngle) * 22,
+            vx: Math.cos(bot.aimAngle) * 16.0,
+            vy: Math.sin(bot.aimAngle) * 16.0,
+            damage: 10,
             weapon: 'uzi',
-            color,
+            color: '#FFD600',
             life: 0,
             maxLife: 60
           });
@@ -4329,22 +4323,19 @@ class MultiplayerGameApp {
         bot.jumpCooldown--;
         bot.meleeCooldown--;
 
-        // Ground walking physics
         const dir = targetX > bot.x ? 1 : -1;
         if (onGround) {
           bot.y = groundY - 24;
           bot.vy = 0;
           bot.vx = dir * bot.speed;
 
-          // Leap / Pounce attack if within range
-          if (distToPlayer < 180 && bot.jumpCooldown <= 0 && targetY < bot.y + 40) {
-            bot.jumpCooldown = 90;
+          if (distToPlayer < 190 && bot.jumpCooldown <= 0 && targetY < bot.y + 50) {
+            bot.jumpCooldown = 85;
             bot.isPouncing = true;
-            bot.vx = dir * (bot.speed * 2.2);
-            bot.vy = -9.5;
+            bot.vx = dir * (bot.speed * 2.3);
+            bot.vy = -9.8;
           }
         } else {
-          // In-air gravity
           bot.vy += 0.42;
           bot.vx *= 0.98;
           if (bot.y >= groundY - 24) {
@@ -4357,13 +4348,13 @@ class MultiplayerGameApp {
         bot.x += bot.vx;
         bot.y += bot.vy;
 
-        // Melee Claw Slash Attack on Player Contact (Within 36px)
-        if (distToPlayer < 36 && bot.meleeCooldown <= 0 && !p.isDead) {
-          bot.meleeCooldown = 35;
+        // Melee Claw Slash
+        if (distToPlayer < 38 && bot.meleeCooldown <= 0 && !p.isDead) {
+          bot.meleeCooldown = 32;
           const slashDmg = 16 + Math.floor(this.swarmState.wave * 1.5);
           p.hp = Math.max(0, p.hp - slashDmg);
           this.spawnImpactSparks(p.x, p.y, '#FF3366');
-          p.vx += dir * 6; // Knockback
+          p.vx += dir * 7;
           p.vy -= 3;
 
           if (p.hp <= 0) {
@@ -4373,208 +4364,625 @@ class MultiplayerGameApp {
         }
       }
 
+      // ── C. PHANTOM SLICER (Fast Buzzsaw Interceptor) ──
+      else if (bot.type === 'PHANTOM_SLICER') {
+        // High-speed swooping flight
+        const swoopAngle = bot.aimAngle + Math.sin(now * 0.006) * 0.4;
+        bot.vx += (Math.cos(swoopAngle) * bot.speed - bot.vx) * 0.08;
+        bot.vy += (Math.sin(swoopAngle) * bot.speed - bot.vy) * 0.08;
+
+        bot.x += bot.vx;
+        bot.y += bot.vy;
+
+        bot.meleeCooldown--;
+        // Plasma Buzzsaw Blade Contact
+        if (distToPlayer < 32 && bot.meleeCooldown <= 0 && !p.isDead) {
+          bot.meleeCooldown = 28;
+          p.hp = Math.max(0, p.hp - 20);
+          this.spawnImpactSparks(p.x, p.y, '#E040FB');
+          p.vx += (Math.random() - 0.5) * 8;
+          p.vy -= 4;
+
+          if (p.hp <= 0) {
+            this.triggerLocalDeath('PHANTOM_SLICER', 'buzzsaw');
+            this.showToast('SLICED DOWN', `Destroyed by Phantom Slicer at Wave ${this.swarmState.wave}!`, '💀');
+          }
+        }
+      }
+
+      // ── D. GOLIATH MECH (Heavy Boss Titan) ──
+      else if (bot.type === 'GOLIATH_MECH' || bot.type === 'HEAVY_BOT') {
+        const hoverY = targetY - 120 + Math.sin(bot.hoverSeed + now * 0.002) * 35;
+        const desiredDist = 200;
+
+        if (distToPlayer > desiredDist) {
+          bot.vx += (Math.cos(bot.aimAngle) * bot.speed - bot.vx) * 0.04;
+          bot.vy += (Math.sin(bot.aimAngle) * bot.speed - bot.vy) * 0.04;
+        } else {
+          bot.vy += ((hoverY - bot.y) * 0.04 - bot.vy) * 0.04;
+          bot.vx *= 0.94;
+        }
+
+        bot.x += bot.vx;
+        bot.y += bot.vy;
+
+        // Heavy Twin Assault Cannon Burst
+        bot.shootCooldown--;
+        if (bot.shootCooldown <= 0 && distToPlayer < 700) {
+          bot.shootCooldown = 70;
+          // Dual Heavy Shots
+          for (let s = -1; s <= 1; s += 2) {
+            this.bullets.push({
+              id: `b_goliath_${now}_${Math.random()}`,
+              ownerId: 'BOT',
+              isBotBullet: true,
+              x: bot.x + Math.cos(bot.aimAngle) * 26 + s * 8,
+              y: bot.y + Math.sin(bot.aimAngle) * 26,
+              vx: Math.cos(bot.aimAngle) * 14.0,
+              vy: Math.sin(bot.aimAngle) * 14.0,
+              damage: 18,
+              weapon: 'uzi',
+              color: '#FF3D00',
+              life: 0,
+              maxLife: 65
+            });
+          }
+        }
+      }
+
       // World Boundary Clamping
       bot.x = Math.max(80, Math.min(this.worldWidth - 80, bot.x));
       bot.y = Math.max(60, Math.min(this.worldHeight - 80, bot.y));
     }
+
+    // ──────────────── 3. SAFE ATOMIC BOT CLEANUP (ZERO CRASHES) ────────────────
+    let anyKilled = false;
+    for (let i = this.swarmBots.length - 1; i >= 0; i--) {
+      const bot = this.swarmBots[i];
+      if (bot.hp <= 0 || bot.isDead) {
+        this.handleBotKill(bot);
+        this.swarmBots.splice(i, 1);
+        anyKilled = true;
+      }
+    }
+    if (anyKilled) {
+      this.updateSwarmHUD();
+    }
+
+    // Check if Wave Cleared!
+    if (this.swarmBots.length === 0 && this.swarmState.waveActive) {
+      this.swarmState.waveActive = false;
+      const waveBonus = this.swarmState.wave * 500;
+      this.swarmState.score += waveBonus;
+      if (this.swarmState.wave > this.swarmState.highestWave) {
+        this.swarmState.highestWave = this.swarmState.wave;
+        localStorage.setItem('wegether_highest_wave', this.swarmState.highestWave.toString());
+        this.updateHighScoreUI();
+      }
+      this.updateSwarmHUD();
+
+      // Revive Friendly AI Companion
+      if (this.aiCompanion) {
+        this.aiCompanion.isDead = false;
+        this.aiCompanion.hp = this.aiCompanion.maxHp;
+        this.aiCompanion.x = this.localPlayer.x - 60;
+        this.aiCompanion.y = this.localPlayer.y - 40;
+      }
+
+      this.showWaveBanner(`WAVE ${this.swarmState.wave} CLEARED!`, `+${waveBonus} BONUS PTS • NEXT WAVE INCOMING`);
+
+      // Schedule next wave
+      setTimeout(() => {
+        if (this.gameMode === 'SWARM_SURVIVAL' && !this.localPlayer.isDead) {
+          this.startSwarmWave(this.swarmState.wave + 1);
+        }
+      }, 3600);
+    }
   }
 
-  // 3. 3D Procedural Cyber Drone (Yellow/Black Floating Sphere with Blue Glowing Eye & Wing Guns)
-  drawCyberDrone(ctx, drone, isFriendly = false) {
+  // ──────────────── HIGH-DEFINITION 3D PROCEDURAL BOT MODELS ────────────────
+
+  // Model 1: APEX CYBER DRONE (Golden-Yellow & Carbon-Fiber Vanguard Flyer)
+  drawApexCyberDrone(ctx, drone, isFriendly = false) {
     ctx.save();
     ctx.translate(drone.x, drone.y);
 
     const facingLeft = drone.facingLeft;
     if (facingLeft) ctx.scale(-1, 1);
 
-    // Jet Exhaust Flame
-    const flameSize = 6 + Math.sin(Date.now() * 0.02) * 3;
-    const flameGrad = ctx.createLinearGradient(0, 10, 0, 10 + flameSize * 2);
-    flameGrad.addColorStop(0, isFriendly ? '#00E5FF' : '#FFD600');
-    flameGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = flameGrad;
+    // 1. Dual Plasma Jet Exhausts
+    const flameSize = 7 + Math.sin(Date.now() * 0.025) * 4;
+    const jetGrad = ctx.createLinearGradient(0, 10, 0, 12 + flameSize * 2);
+    jetGrad.addColorStop(0, '#FFD600');
+    jetGrad.addColorStop(0.5, '#FF6D00');
+    jetGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = jetGrad;
+
     ctx.beginPath();
-    ctx.moveTo(-6, 12);
-    ctx.lineTo(6, 12);
-    ctx.lineTo(0, 14 + flameSize * 2);
-    ctx.closePath();
-    ctx.fill();
-
-    // Side Cannon Wings (Black Chassis with Gun Barrels)
-    ctx.fillStyle = '#1E232A';
-    ctx.strokeStyle = '#0F1318';
-    ctx.lineWidth = 2;
-
-    // Upper & Lower Wing Struts
-    ctx.fillRect(-26, -6, 12, 12);
-    ctx.strokeRect(-26, -6, 12, 12);
-    ctx.fillRect(14, -6, 12, 12);
-    ctx.strokeRect(14, -6, 12, 12);
-
-    // Twin Rotary Gun Barrels
-    ctx.fillStyle = '#455A64';
-    ctx.fillRect(24, -4, 10, 3);
-    ctx.fillRect(24, 1, 10, 3);
-
-    // Main Spherical Casing (Outer Shell)
-    const shellColor = isFriendly ? '#00E5FF' : (drone.type === 'HEAVY_BOT' ? '#FF5722' : '#FFB300');
-    const coreGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, 18);
-    coreGrad.addColorStop(0, shellColor);
-    coreGrad.addColorStop(0.7, isFriendly ? '#0097A7' : (drone.type === 'HEAVY_BOT' ? '#D84315' : '#FF8F00'));
-    coreGrad.addColorStop(1, '#1A1D24');
-
-    ctx.fillStyle = coreGrad;
+    ctx.moveTo(-9, 10); ctx.lineTo(-3, 10); ctx.lineTo(-6, 12 + flameSize * 2); ctx.fill();
     ctx.beginPath();
-    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.moveTo(3, 10); ctx.lineTo(9, 10); ctx.lineTo(6, 12 + flameSize * 2); ctx.fill();
+
+    // 2. Heavy Gun Wings with Multi-Barreled Rotary Autocannons
+    ctx.fillStyle = '#181C22';
+    ctx.strokeStyle = '#0B0E12';
+    ctx.lineWidth = 1.5;
+
+    // Wing Pylons
+    ctx.fillRect(-28, -7, 14, 14);
+    ctx.strokeRect(-28, -7, 14, 14);
+    ctx.fillRect(14, -7, 14, 14);
+    ctx.strokeRect(14, -7, 14, 14);
+
+    // Triple Rotary Gun Barrels
+    ctx.fillStyle = '#37474F';
+    ctx.fillRect(26, -5, 12, 3);
+    ctx.fillRect(26, -1, 12, 3);
+    ctx.fillRect(26, 3, 12, 3);
+    // Muzzle Brakes
+    ctx.fillStyle = '#263238';
+    ctx.fillRect(36, -6, 3, 5);
+    ctx.fillRect(36, 2, 3, 5);
+
+    // 3. Main Multi-Layered Spherical Hull
+    const shellGrad = ctx.createRadialGradient(-5, -5, 2, 0, 0, 20);
+    shellGrad.addColorStop(0, '#FFD54F');
+    shellGrad.addColorStop(0.5, '#FFB300');
+    shellGrad.addColorStop(0.85, '#FF8F00');
+    shellGrad.addColorStop(1, '#212121');
+
+    ctx.fillStyle = shellGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#101418';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Center Armor Band (Black Inset Segment)
-    ctx.fillStyle = '#21252D';
-    ctx.fillRect(-6, -16, 12, 32);
-    ctx.strokeStyle = '#0E1116';
-    ctx.strokeRect(-6, -16, 12, 32);
-
-    // Glowing Central Optical Camera Eye (Blue Iris with Lens Flare)
-    const eyeColor = isFriendly ? '#76FF03' : '#00E5FF';
-    this.setGlow(ctx, eyeColor, 12);
-    ctx.fillStyle = eyeColor;
+    // 4. Inset Carbon-Fiber Armor Plates & Rivets
+    ctx.fillStyle = '#263238';
     ctx.beginPath();
-    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.arc(0, 0, 13, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.lineTo(0, 13);
+    ctx.arc(0, 0, 13, Math.PI * 0.6, Math.PI * 1.4);
+    ctx.closePath();
     ctx.fill();
 
-    // Inner Pupil & Lens Highlight
-    ctx.fillStyle = '#FFFFFF';
+    // Armor Rivets
+    ctx.fillStyle = '#ECEFF1';
+    ctx.beginPath();
+    ctx.arc(-8, -10, 1.2, 0, Math.PI * 2);
+    ctx.arc(-8, 10, 1.2, 0, Math.PI * 2);
+    ctx.arc(8, -10, 1.2, 0, Math.PI * 2);
+    ctx.arc(8, 10, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 5. High-Tech Sapphire Crystalline Eye Lens
+    this.setGlow(ctx, '#00E5FF', 14);
+    const eyeGrad = ctx.createRadialGradient(0, 0, 1, 0, 0, 8);
+    eyeGrad.addColorStop(0, '#FFFFFF');
+    eyeGrad.addColorStop(0.3, '#00E5FF');
+    eyeGrad.addColorStop(0.7, '#0091EA');
+    eyeGrad.addColorStop(1, '#01579B');
+
+    ctx.fillStyle = eyeGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glass Reflection Arc Highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath();
     ctx.arc(2, -2, 2.5, 0, Math.PI * 2);
     ctx.fill();
     this.setGlow(ctx, '#000', 0);
 
-    // Health Bar
+    // Subtle Laser Targeting Line
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(8, 0); ctx.lineTo(120, 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 6. Health Bar
     const hpRatio = Math.max(0, drone.hp / drone.maxHp);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(-18, -26, 36, 5);
-    ctx.fillStyle = isFriendly ? '#00E676' : '#FF3366';
-    ctx.fillRect(-17, -25, 34 * hpRatio, 3);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(-18, -28, 36, 5);
+    ctx.fillStyle = '#FF3366';
+    ctx.fillRect(-17, -27, 34 * hpRatio, 3);
 
     ctx.restore();
   }
 
-  // 4. 3D Procedural Insectoid Stalker (Red/Maroon Alien Walker with Multi-Ocular Eyes & Scythe Legs)
-  drawInsectoidStalker(ctx, stalker) {
+  // Model 2: CRIMSON ARACHNID STALKER (Multi-Legged Alien Predator)
+  drawCrimsonArachnid(ctx, stalker) {
     ctx.save();
     ctx.translate(stalker.x, stalker.y);
 
     const facingLeft = stalker.facingLeft;
     if (facingLeft) ctx.scale(-1, 1);
 
-    const walk = Math.sin(stalker.animFrame) * 8;
+    const walk = Math.sin(stalker.animFrame) * 9;
+    const isPouncing = stalker.isPouncing;
 
-    // 1. Articulated Scythe Insectoid Legs (4 Spindly Scythe Limbs)
-    ctx.strokeStyle = '#4A121A';
-    ctx.lineWidth = 3;
+    // 1. Heavy Articulated Hydraulic Scythe Legs (4 Segmented Insectoid Limbs)
+    ctx.strokeStyle = '#3E0A10';
+    ctx.lineWidth = 3.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    // Back Left Leg
+    // Back Rear Leg
     ctx.beginPath();
-    ctx.moveTo(-6, 2);
-    ctx.lineTo(-24 - walk, -10);
-    ctx.lineTo(-32 - walk * 0.5, 20);
+    ctx.moveTo(-8, 3);
+    ctx.lineTo(-28 - walk, isPouncing ? -18 : -12);
+    ctx.lineTo(-36 - walk * 0.6, isPouncing ? 10 : 22);
     ctx.stroke();
 
-    // Front Left Leg
+    // Front Leading Leg
     ctx.beginPath();
-    ctx.moveTo(6, 2);
-    ctx.lineTo(22 + walk, -8);
-    ctx.lineTo(28 + walk * 0.8, 20);
+    ctx.moveTo(8, 3);
+    ctx.lineTo(26 + walk, isPouncing ? -22 : -10);
+    ctx.lineTo(34 + walk * 0.8, isPouncing ? 8 : 22);
     ctx.stroke();
 
-    // Middle Legs
+    // Middle Secondary Legs
+    ctx.strokeStyle = '#5C0D18';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(-2, 4);
-    ctx.lineTo(-14 + walk * 0.7, -14);
-    ctx.lineTo(-20 + walk * 0.5, 22);
+    ctx.moveTo(-2, 5);
+    ctx.lineTo(-18 + walk * 0.8, -16);
+    ctx.lineTo(-24 + walk * 0.6, 24);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(2, 4);
-    ctx.lineTo(14 - walk * 0.7, -14);
-    ctx.lineTo(18 - walk * 0.5, 22);
+    ctx.moveTo(2, 5);
+    ctx.lineTo(18 - walk * 0.8, -16);
+    ctx.lineTo(24 - walk * 0.6, 24);
     ctx.stroke();
 
-    // Glowing Scythe Blade Tips
-    this.setGlow(ctx, '#FF1744', 8);
+    // Glowing Obsidian-Crimson Scythe Blade Tips
+    this.setGlow(ctx, '#FF1744', 10);
     ctx.fillStyle = '#FF1744';
     ctx.beginPath();
-    ctx.arc(-32 - walk * 0.5, 20, 2.5, 0, Math.PI * 2);
-    ctx.arc(28 + walk * 0.8, 20, 2.5, 0, Math.PI * 2);
+    ctx.arc(-36 - walk * 0.6, isPouncing ? 10 : 22, 3, 0, Math.PI * 2);
+    ctx.arc(34 + walk * 0.8, isPouncing ? 8 : 22, 3, 0, Math.PI * 2);
     ctx.fill();
     this.setGlow(ctx, '#000', 0);
 
-    // 2. Main Crimson Carapace Dome Head
-    const headGrad = ctx.createLinearGradient(0, -18, 0, 10);
-    headGrad.addColorStop(0, '#D50000');
-    headGrad.addColorStop(0.6, '#B71C1C');
-    headGrad.addColorStop(1, '#3E0A10');
+    // 2. Sculpted Crimson Carapace Dome with Segmented Spine Plates
+    const carapaceGrad = ctx.createLinearGradient(0, -22, 0, 12);
+    carapaceGrad.addColorStop(0, '#FF1744');
+    carapaceGrad.addColorStop(0.35, '#D50000');
+    carapaceGrad.addColorStop(0.7, '#B71C1C');
+    carapaceGrad.addColorStop(1, '#2E0207');
 
-    ctx.fillStyle = headGrad;
+    ctx.fillStyle = carapaceGrad;
     ctx.beginPath();
-    ctx.ellipse(0, -2, 22, 11, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -3, 25, 13, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#260408';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#1A0104';
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // Dark Lower Mandible Rim
-    ctx.fillStyle = '#1A0407';
+    // Chitin Ridge Spine Segments
+    ctx.strokeStyle = 'rgba(255, 128, 128, 0.4)';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.ellipse(2, 4, 16, 5, 0, 0, Math.PI * 2);
+    ctx.moveTo(-16, -5); ctx.lineTo(-16, -1);
+    ctx.moveTo(-8, -8); ctx.lineTo(-8, 2);
+    ctx.moveTo(0, -10); ctx.lineTo(0, 4);
+    ctx.moveTo(8, -8); ctx.lineTo(8, 2);
+    ctx.stroke();
+
+    // Predatory Snap Mandibles
+    ctx.fillStyle = '#1A0104';
+    ctx.beginPath();
+    ctx.moveTo(14, 4); ctx.lineTo(24, 8); ctx.lineTo(18, 11); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(14, -2); ctx.lineTo(24, -6); ctx.lineTo(18, -3); ctx.closePath();
     ctx.fill();
 
-    // 3. Multi-Ocular Glowing White Sensor Eyes (Cluster of 4 Eyes)
-    this.setGlow(ctx, '#FFFFFF', 6);
+    // 3. Multi-Ocular Glowing White Predator Sensor Cluster (5 Eyes)
+    this.setGlow(ctx, '#FFFFFF', 8);
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.arc(6, -3, 3, 0, Math.PI * 2);
-    ctx.arc(13, -2, 3.5, 0, Math.PI * 2);
-    ctx.arc(18, -1, 2.5, 0, Math.PI * 2);
-    ctx.arc(10, 3, 2, 0, Math.PI * 2);
+    ctx.arc(8, -5, 3.5, 0, Math.PI * 2);
+    ctx.arc(16, -4, 4.2, 0, Math.PI * 2);
+    ctx.arc(21, -2, 3.0, 0, Math.PI * 2);
+    ctx.arc(13, 2, 2.5, 0, Math.PI * 2);
+    ctx.arc(19, 3, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Small Cyan Pupil Points
+    ctx.fillStyle = '#00E5FF';
+    ctx.beginPath();
+    ctx.arc(8, -5, 1.2, 0, Math.PI * 2);
+    ctx.arc(16, -4, 1.5, 0, Math.PI * 2);
+    ctx.arc(21, -2, 1.0, 0, Math.PI * 2);
     ctx.fill();
     this.setGlow(ctx, '#000', 0);
 
-    // Health Bar
+    // 4. Health Bar
     const hpRatio = Math.max(0, stalker.hp / stalker.maxHp);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.fillRect(-16, -22, 32, 4);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(-18, -26, 36, 5);
     ctx.fillStyle = '#FF1744';
-    ctx.fillRect(-15, -21, 30 * hpRatio, 2.5);
+    ctx.fillRect(-17, -25, 34 * hpRatio, 3);
 
     ctx.restore();
   }
 
-  // 5. Friendly AI Companion Drone ("Delta-1")
-  drawAICompanion(ctx, comp) {
+  // Model 3: PHANTOM SLICER (Obsidian & Neon-Violet Buzzsaw Interceptor)
+  drawPhantomSlicer(ctx, bot) {
     ctx.save();
-    // Cyan Shield Orbit Ring
-    ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+    ctx.translate(bot.x, bot.y);
+
+    const facingLeft = bot.facingLeft;
+    if (facingLeft) ctx.scale(-1, 1);
+
+    const spin = Date.now() * 0.03;
+
+    // 1. Spinning Dual Buzzsaw Plasma Blades
+    this.setGlow(ctx, '#E040FB', 12);
+    ctx.fillStyle = '#E040FB';
+    ctx.strokeStyle = '#FFFFFF';
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([4, 4]);
+
+    // Top Buzzsaw
+    ctx.save();
+    ctx.translate(-8, -18);
+    ctx.rotate(spin);
     ctx.beginPath();
-    ctx.arc(comp.x, comp.y, 28, 0, Math.PI * 2);
+    for (let j = 0; j < 6; j++) {
+      const a = (j / 6) * Math.PI * 2;
+      ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9);
+      ctx.lineTo(Math.cos(a + 0.5) * 4, Math.sin(a + 0.5) * 4);
+    }
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.restore();
 
-    // Draw Drone Base Model
-    this.drawCyberDrone(ctx, comp, true);
+    // Bottom Buzzsaw
+    ctx.save();
+    ctx.translate(-8, 18);
+    ctx.rotate(-spin);
+    ctx.beginPath();
+    for (let j = 0; j < 6; j++) {
+      const a = (j / 6) * Math.PI * 2;
+      ctx.lineTo(Math.cos(a) * 9, Math.sin(a) * 9);
+      ctx.lineTo(Math.cos(a + 0.5) * 4, Math.sin(a + 0.5) * 4);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    this.setGlow(ctx, '#000', 0);
 
-    // AI Companion Callsign
+    // 2. Aerodynamic Obsidian Delta-Wing Chassis
+    const deltaGrad = ctx.createLinearGradient(-20, 0, 20, 0);
+    deltaGrad.addColorStop(0, '#120024');
+    deltaGrad.addColorStop(0.5, '#311B92');
+    deltaGrad.addColorStop(1, '#651FFF');
+
+    ctx.fillStyle = deltaGrad;
+    ctx.beginPath();
+    ctx.moveTo(22, 0);
+    ctx.lineTo(-18, -16);
+    ctx.lineTo(-10, 0);
+    ctx.lineTo(-18, 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#D500F9';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Neon Trim Inset
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-12, -10);
+    ctx.moveTo(14, 0);
+    ctx.lineTo(-12, 10);
+    ctx.stroke();
+
+    // Horizontal Scanning Tracker Visor
+    this.setGlow(ctx, '#E040FB', 10);
+    ctx.fillStyle = '#E040FB';
+    ctx.fillRect(8, -2, 10, 4);
+    this.setGlow(ctx, '#000', 0);
+
+    // Health Bar
+    const hpRatio = Math.max(0, bot.hp / bot.maxHp);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(-18, -28, 36, 5);
+    ctx.fillStyle = '#E040FB';
+    ctx.fillRect(-17, -27, 34 * hpRatio, 3);
+
+    ctx.restore();
+  }
+
+  // Model 4: GOLIATH MECH (Heavy Armor Boss Titan with Dual Autocannons)
+  drawGoliathMech(ctx, bot) {
+    ctx.save();
+    ctx.translate(bot.x, bot.y);
+
+    const facingLeft = bot.facingLeft;
+    if (facingLeft) ctx.scale(-1, 1);
+
+    // 1. Heavy Reinforced Shoulder Pauldrons & Missile Pods
+    ctx.fillStyle = '#263238';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+
+    // Top Missile Racks
+    ctx.fillRect(-22, -26, 16, 12);
+    ctx.strokeRect(-22, -26, 16, 12);
+    // Missile Nose Cones
+    ctx.fillStyle = '#FF3D00';
+    ctx.beginPath();
+    ctx.arc(-18, -26, 2.5, 0, Math.PI * 2);
+    ctx.arc(-10, -26, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Dual Heavy Rotary Autocannon Barrels
+    ctx.fillStyle = '#1A1E24';
+    ctx.fillRect(18, -10, 22, 6);
+    ctx.fillRect(18, 4, 22, 6);
+    ctx.strokeStyle = '#FF3D00';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(18, -10, 22, 6);
+    ctx.strokeRect(18, 4, 22, 6);
+
+    // 3. Massive Armored Chassis with Hazard Stripes
+    const mechGrad = ctx.createLinearGradient(-20, -20, 20, 20);
+    mechGrad.addColorStop(0, '#455A64');
+    mechGrad.addColorStop(0.5, '#263238');
+    mechGrad.addColorStop(1, '#101417');
+
+    ctx.fillStyle = mechGrad;
+    ctx.beginPath();
+    ctx.roundRect(-24, -20, 44, 40, 6);
+    ctx.fill();
+    ctx.strokeStyle = '#FF6D00';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Hazard Stripes on Lower Plate
+    ctx.fillStyle = '#FFD600';
+    ctx.fillRect(-18, 10, 32, 6);
+    ctx.fillStyle = '#1A1A1A';
+    for (let s = -18; s < 14; s += 8) {
+      ctx.beginPath();
+      ctx.moveTo(s, 16); ctx.lineTo(s + 4, 10); ctx.lineTo(s + 7, 10); ctx.lineTo(s + 3, 16);
+      ctx.fill();
+    }
+
+    // 4. Glowing Red Cyclops Combat Visor & Reactor Core
+    this.setGlow(ctx, '#FF1744', 14);
+    ctx.fillStyle = '#FF1744';
+    ctx.fillRect(4, -8, 16, 5);
+
+    // Glowing Power Reactor Core
+    ctx.beginPath();
+    ctx.arc(-6, 0, 7, 0, Math.PI * 2);
+    ctx.fillStyle = '#FF3D00';
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(-6, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    this.setGlow(ctx, '#000', 0);
+
+    // 5. Boss Health Bar (Large Double-Tier Bar)
+    const hpRatio = Math.max(0, bot.hp / bot.maxHp);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(-26, -36, 52, 7);
+    ctx.fillStyle = '#FF3D00';
+    ctx.fillRect(-25, -35, 50 * hpRatio, 5);
+    ctx.strokeStyle = '#FFD600';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-26, -36, 52, 7);
+
+    ctx.font = 'bold 9px "Chakra Petch", sans-serif';
+    ctx.fillStyle = '#FFD600';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOLIATH TITAN', 0, -40);
+
+    ctx.restore();
+  }
+
+  // Model 5: DELTA-1 PRIME (Friendly Tactical High-Combat Companion Drone)
+  drawAICompanionPrime(ctx, comp) {
+    ctx.save();
+    ctx.translate(comp.x, comp.y);
+
+    const facingLeft = comp.facingLeft;
+    if (facingLeft) ctx.scale(-1, 1);
+
+    const time = Date.now() * 0.003;
+
+    // 1. Dual 3D Gyroscopic Holographic Shield Rings
+    this.setGlow(ctx, '#00E5FF', 10);
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 34, 18, time, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(118, 255, 3, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 34, 18, -time * 1.2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Orbiting Energy Particle Nodes
+    ctx.fillStyle = '#00E5FF';
+    ctx.beginPath();
+    ctx.arc(Math.cos(time) * 34, Math.sin(time) * 18, 3, 0, Math.PI * 2);
+    ctx.arc(Math.cos(-time * 1.2) * 34, Math.sin(-time * 1.2) * 18, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Cyan Plasma Jet Thruster
+    const flameSize = 6 + Math.sin(Date.now() * 0.03) * 3;
+    const flameGrad = ctx.createLinearGradient(0, 10, 0, 12 + flameSize * 2);
+    flameGrad.addColorStop(0, '#00E5FF');
+    flameGrad.addColorStop(0.6, '#76FF03');
+    flameGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(0, 12 + flameSize * 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Sleek Aerodynamic Cyber-Cyan & Carbon Shell
+    const shellGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, 18);
+    shellGrad.addColorStop(0, '#E0F7FA');
+    shellGrad.addColorStop(0.4, '#00E5FF');
+    shellGrad.addColorStop(0.8, '#0097A7');
+    shellGrad.addColorStop(1, '#006064');
+
+    ctx.fillStyle = shellGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#00E5FF';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    // Top Pulse Laser Cannon
+    ctx.fillStyle = '#263238';
+    ctx.fillRect(10, -5, 14, 4);
+    ctx.fillStyle = '#00E5FF';
+    ctx.fillRect(22, -6, 3, 6);
+
+    // 4. Glowing Optical Visor & Status Sensor
+    this.setGlow(ctx, '#76FF03', 12);
+    ctx.fillStyle = '#76FF03';
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(2, -2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    this.setGlow(ctx, '#000', 0);
+
+    // 5. Callsign & Health Bar
+    const hpRatio = Math.max(0, comp.hp / comp.maxHp);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(-18, -28, 36, 5);
+    ctx.fillStyle = '#00E676';
+    ctx.fillRect(-17, -27, 34 * hpRatio, 3);
+
     ctx.font = 'bold 10px "Chakra Petch", sans-serif';
     ctx.fillStyle = '#00E5FF';
     ctx.textAlign = 'center';
-    ctx.fillText('DELTA-1 [AI]', comp.x, comp.y - 30);
+    ctx.fillText('DELTA-1 [AI PRIME]', 0, -32);
 
     ctx.restore();
   }
