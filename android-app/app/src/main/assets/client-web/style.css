@@ -1388,12 +1388,40 @@ body.is-touch-device .touch-controls {
   box-shadow: 0 0 15px var(--accent-cyan);
   position: absolute;
   pointer-events: none;
-  transition: transform 0.04s ease-out;
+  transition: transform 0.04s ease-out, background 0.15s, box-shadow 0.15s;
+}
+
+.right .joystick-base::before {
+  content: '';
+  position: absolute;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 229, 255, 0.45);
+  pointer-events: none;
 }
 
 .right .joystick-thumb {
-  background: var(--team-red);
-  box-shadow: 0 0 15px var(--team-red);
+  background: var(--accent-cyan);
+  box-shadow: 0 0 15px var(--accent-cyan);
+}
+
+.right .joystick-thumb.aiming-only {
+  background: #00E5FF;
+  box-shadow: 0 0 20px #00E5FF;
+  border: 2px solid #FFF;
+}
+
+.right .joystick-thumb.firing {
+  background: #FF3366;
+  box-shadow: 0 0 24px #FF3366, 0 0 8px #FFD600;
+  border: 2px solid #FFD600;
+  animation: joyFirePulse 0.3s infinite alternate ease-in-out;
+}
+
+@keyframes joyFirePulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.08); filter: brightness(1.25); }
 }
 
 .joy-label {
@@ -1404,4 +1432,5 @@ body.is-touch-device .touch-controls {
   margin-top: 5px;
   letter-spacing: 0.5px;
   pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }

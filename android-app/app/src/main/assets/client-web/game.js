@@ -534,9 +534,12 @@ class MultiplayerGameApp {
     });
 
     document.getElementById('btn-exit-game').addEventListener('click', () => {
+      if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
+      this.swarmNextWaveTimer = null;
       if (this.gameMode === 'SWARM_SURVIVAL') {
         this.gameMode = 'MULTIPLAYER';
         this.swarmBots = [];
+        this.groundGuns = [];
         this.aiCompanion = null;
         this.showScreen('menu');
         this.updateHighScoreUI();
@@ -734,9 +737,10 @@ class MultiplayerGameApp {
     this.tacticalPickups = [];
 
     this.keys = {};
-    this.mouse = { x: 0, y: 0, isDown: false };
+    this.mouse = { x: 0, y: 0, isDown: false, active: false };
     this.touchJoyLeft = { active: false, vx: 0, vy: 0 };
-    this.touchJoyRight = { active: false, vx: 0, vy: 0, isAiming: false };
+    this.touchJoyRight = { active: false, vx: 0, vy: 0, isAiming: false, isFiring: false };
+    this.lastAimAngle = 0;
 
     this.setupInputHandlers();
     this.buildNaturalMap();
@@ -1013,6 +1017,7 @@ class MultiplayerGameApp {
     this.canvas.addEventListener('mousemove', (e) => {
       this.mouse.x = e.clientX;
       this.mouse.y = e.clientY;
+      this.mouse.active = true;
     });
 
     this.canvas.addEventListener('mousedown', () => { this.mouse.isDown = true; });
@@ -1026,6 +1031,7 @@ class MultiplayerGameApp {
     const leftThumb = document.getElementById('joy-left-thumb');
     const rightZone = document.getElementById('joy-right-zone');
     const rightThumb = document.getElementById('joy-right-thumb');
+    const rightLabel = document.getElementById('joy-right-label');
 
     const bindJoystick = (zone, thumb, joyObj, isRight) => {
       let touchId = null;
@@ -1060,8 +1066,29 @@ class MultiplayerGameApp {
             joyObj.vx = thumbX / maxRadius;
             joyObj.vy = thumbY / maxRadius;
 
-            if (isRight && dist > 14) {
-              joyObj.isAiming = true;
+            if (isRight) {
+              const aimThreshold = 10;   // Moderate drag: Aim 360° only (laser sightline)
+              const fireThreshold = 26;  // Extended drag: Auto-fire weapon
+
+              if (dist >= aimThreshold) {
+                joyObj.isAiming = true;
+                if (dist >= fireThreshold) {
+                  joyObj.isFiring = true;
+                  thumb.classList.add('firing');
+                  thumb.classList.remove('aiming-only');
+                  if (rightLabel) rightLabel.textContent = '🔥 FIRING';
+                } else {
+                  joyObj.isFiring = false;
+                  thumb.classList.add('aiming-only');
+                  thumb.classList.remove('firing');
+                  if (rightLabel) rightLabel.textContent = '🎯 AIMING';
+                }
+              } else {
+                joyObj.isAiming = false;
+                joyObj.isFiring = false;
+                thumb.classList.remove('firing', 'aiming-only');
+                if (rightLabel) rightLabel.textContent = 'AIM / DRAG TO FIRE';
+              }
             }
           }
         }
@@ -1075,7 +1102,12 @@ class MultiplayerGameApp {
             joyObj.active = false;
             joyObj.vx = 0;
             joyObj.vy = 0;
-            if (isRight) joyObj.isAiming = false;
+            if (isRight) {
+              joyObj.isAiming = false;
+              joyObj.isFiring = false;
+              thumb.classList.remove('firing', 'aiming-only');
+              if (rightLabel) rightLabel.textContent = 'AIM / DRAG TO FIRE';
+            }
           }
         }
       };
@@ -1261,12 +1293,15 @@ class MultiplayerGameApp {
       isDead: false
     };
 
-    // Reset Swarm State
+    // Reset Swarm State & Clear Timers
+    if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
+    this.swarmNextWaveTimer = null;
     this.swarmState.wave = 1;
     this.swarmState.score = 0;
     this.swarmState.waveActive = true;
     this.swarmState.waveDelayTimer = 0;
     this.swarmBots = [];
+    this.groundGuns = [];
     this.bullets = [];
     this.grenades = [];
     this.landmines = [];
@@ -1633,7 +1668,7 @@ class MultiplayerGameApp {
           this.updateCamera();
 
           const now = performance.now();
-          const shouldShoot = this.mouse.isDown || this.touchJoyRight.isAiming;
+          const shouldShoot = this.mouse.isDown || this.touchJoyRight.isFiring;
           const cooldown = fireDelays[this.currentWeapon] || 110;
 
           if (shouldShoot && now - lastShootTime > cooldown && this.localPlayer.hp > 0 && !this.localPlayer.isDead) {
@@ -1811,10 +1846,17 @@ class MultiplayerGameApp {
 
       if (this.touchJoyRight.isAiming) {
         p.aimAngle = Math.atan2(this.touchJoyRight.vy, this.touchJoyRight.vx);
-      } else {
+        this.lastAimAngle = p.aimAngle;
+      } else if (this.mouse && this.mouse.active) {
         const worldMouseX = this.camera.x + (this.mouse.x - this.canvas.width / 2) / this.currentZoom;
         const worldMouseY = this.camera.y + (this.mouse.y - this.canvas.height / 2) / this.currentZoom;
         p.aimAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
+        this.lastAimAngle = p.aimAngle;
+      } else if (this.lastAimAngle !== undefined && isFinite(this.lastAimAngle)) {
+        p.aimAngle = this.lastAimAngle;
+      } else if (Math.abs(p.vx) > 0.4) {
+        p.aimAngle = p.vx < 0 ? Math.PI : 0;
+        this.lastAimAngle = p.aimAngle;
       }
     }
 
@@ -2168,6 +2210,47 @@ class MultiplayerGameApp {
         this.updateTacticalHUD();
         this.send('PICKUP_COLLECT', { pickupId: pk.id, pickupType: pk.type });
       }
+    }
+
+    // Ground Gun Physics, Platform Landing & Lifetime Decay (Prevents Memory Leaks)
+    for (let i = this.groundGuns.length - 1; i >= 0; i--) {
+      const gun = this.groundGuns[i];
+      gun.lifetime = (gun.lifetime || 0) + 1;
+      if (gun.lifetime > 2800 || !gun.available) {
+        this.groundGuns.splice(i, 1);
+        continue;
+      }
+      if (!gun.stuck) {
+        gun.vy = (gun.vy || 0) + 0.35;
+        gun.x += (gun.vx || 0);
+        gun.y += gun.vy;
+        gun.vx = (gun.vx || 0) * 0.96;
+
+        const gy = this.getGroundYAt(gun.x);
+        if (gun.y >= gy - 6) {
+          gun.y = gy - 6;
+          gun.vx = 0;
+          gun.vy = 0;
+          gun.stuck = true;
+        } else {
+          for (const plat of this.platforms) {
+            if (gun.x >= plat.x && gun.x <= plat.x + plat.w) {
+              const topY = this.getPlatformTopY(plat, gun.x);
+              if (gun.y >= topY - 6 && gun.y <= topY + 16) {
+                gun.y = topY - 6;
+                gun.vx = 0;
+                gun.vy = 0;
+                gun.stuck = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    // Hard Limit Max 14 Dropped Guns
+    if (this.groundGuns.length > 14) {
+      this.groundGuns.splice(0, this.groundGuns.length - 14);
     }
 
     // Manual [E] Gun Prompt
@@ -3025,7 +3108,7 @@ class MultiplayerGameApp {
     ctx.restore();
   }
 
-  // 4. Natural Organic Rock Platform (Authentic Hand-Drawn Earthy Stones, Curved Bowl Underside, Embedded Faceted Polygon Rocks & Cartoon Grass)
+  // 4. Natural Organic Rock Platform (Monolithic Plateau with Sedimentary Strata, Moss Fringes & Lush Canopy)
   drawRockPlatform(ctx, plat) {
     ctx.save();
 
@@ -3046,179 +3129,272 @@ class MultiplayerGameApp {
     for (let i = numSamples; i >= 0; i--) {
       const px = plat.x + i * stepX;
       const progress = i / numSamples;
-      const bowlDrop = Math.sin(progress * Math.PI) * 35 + Math.sin(progress * 10) * 6;
+      const bowlDrop = Math.sin(progress * Math.PI) * 36 + Math.sin(progress * 12) * 5;
       const py = plat.y + plat.h + bowlDrop;
       ctx.lineTo(px, py);
     }
     ctx.closePath();
 
-    // B. Drop Shadow Beneath Organic Island
+    // B. Drop Shadow Beneath Floating Rock Island
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 8;
-    ctx.fillStyle = '#6E5F50';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 10;
+    ctx.fillStyle = '#42372F';
     ctx.fill();
     ctx.restore();
 
-    // C. Earthy Rock Stone Polygon Body (Gradient Fill)
+    // C. Sedimentary Rock Body Gradient
     const rockGrad = ctx.createLinearGradient(0, plat.y - 20, 0, plat.y + plat.h + 40);
-    rockGrad.addColorStop(0, '#948472');
-    rockGrad.addColorStop(0.35, '#7D6E5D');
-    rockGrad.addColorStop(0.8, '#5E5042');
-    rockGrad.addColorStop(1, '#4A3D31');
+    rockGrad.addColorStop(0, '#8D7B68');
+    rockGrad.addColorStop(0.3, '#796855');
+    rockGrad.addColorStop(0.7, '#594A3C');
+    rockGrad.addColorStop(1, '#3E3126');
 
     ctx.fillStyle = rockGrad;
     ctx.fill();
 
-    // D. Heavy Black Cartoon Contour Outline
-    ctx.strokeStyle = '#241C15';
-    ctx.lineWidth = 3;
+    // D. Heavy Rock Outline
+    ctx.strokeStyle = '#221912';
+    ctx.lineWidth = 2.8;
     ctx.stroke();
 
-    // E. Stone Fissure & Crack Lines on the Rock Face
-    ctx.strokeStyle = '#382E25';
-    ctx.lineWidth = 1.6;
+    // E. Realistic Geological Cracks & Strata Fractures
+    ctx.strokeStyle = '#382B21';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
     const midX = plat.x + plat.w * 0.45;
     const midTopY = this.getPlatformTopY(plat, midX);
-    ctx.moveTo(midX - 30, midTopY + 14);
-    ctx.lineTo(midX - 15, midTopY + 32);
-    ctx.lineTo(midX + 10, midTopY + 48);
+    ctx.moveTo(midX - 25, midTopY + 12);
+    ctx.lineTo(midX - 10, midTopY + 30);
+    ctx.lineTo(midX + 15, midTopY + 45);
 
     const rightX = plat.x + plat.w * 0.72;
     const rightTopY = this.getPlatformTopY(plat, rightX);
-    ctx.moveTo(rightX, rightTopY + 12);
-    ctx.lineTo(rightX + 18, rightTopY + 34);
+    ctx.moveTo(rightX, rightTopY + 14);
+    ctx.lineTo(rightX + 16, rightTopY + 32);
     ctx.stroke();
 
-    // F. Embedded Faceted Polygon Rocks & Mineral Chunks (Matching Screenshot 2)
-    // 1. Along the curved bottom boundary:
-    const numPebbles = 16;
-    for (let i = 0; i <= numPebbles; i++) {
-      const progress = i / numPebbles;
+    // F. Hanging Moss Tendrils & Vines Along Underside (No Triangles)
+    ctx.fillStyle = '#2E7D32';
+    ctx.strokeStyle = '#1B5E20';
+    ctx.lineWidth = 1.2;
+    for (let i = 2; i < numSamples - 1; i += 2) {
+      const progress = i / numSamples;
       const px = plat.x + progress * plat.w;
-      const bowlDrop = Math.sin(progress * Math.PI) * 35 + Math.sin(progress * 10) * 6;
-      const py = plat.y + plat.h + bowlDrop - 2;
-      const pr = 6 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 7;
-      const angle = (i * 0.6) + Math.sin(i);
-      this.drawFacetedRock(ctx, px, py, pr, angle, i + 1);
+      const bowlDrop = Math.sin(progress * Math.PI) * 36 + Math.sin(progress * 12) * 5;
+      const py = plat.y + plat.h + bowlDrop;
+      const tendrilLen = 8 + (Math.sin(i * 3.3) * 0.5 + 0.5) * 12;
+
+      ctx.beginPath();
+      ctx.moveTo(px - 4, py - 2);
+      ctx.quadraticCurveTo(px + Math.sin(i) * 4, py + tendrilLen * 0.6, px, py + tendrilLen);
+      ctx.quadraticCurveTo(px + 3, py + tendrilLen * 0.5, px + 4, py - 2);
+      ctx.fill();
+      ctx.stroke();
     }
 
-    // 2. Scattered interior faceted stones across the rock face (Matching Screenshot 2):
-    this.drawFacetedRock(ctx, plat.x + plat.w * 0.28, plat.y + 36, 11, 0.4, 11);
-    this.drawFacetedRock(ctx, plat.x + plat.w * 0.68, plat.y + 44, 13, -0.3, 12);
-    this.drawFacetedRock(ctx, plat.x + plat.w * 0.48, plat.y + 56, 9, 0.7, 13);
-    this.drawFacetedRock(ctx, plat.x + plat.w * 0.18, plat.y + 50, 8, -0.5, 14);
-    this.drawFacetedRock(ctx, plat.x + plat.w * 0.82, plat.y + 38, 10, 0.2, 15);
-
-    // G. Multi-Layered Pointed Cartoon Grass on Top Sloped Ridge
-    // Layer 1: Dark Green Under-Shadow Grass
-    ctx.fillStyle = '#33691E';
-    for (let i = 0; i < numSamples; i++) {
+    // G. Top Edge: Thick Lush Emerald Turf Canopy & Organic Blade Clusters
+    // 1. Dark Rich Undergrowth Ribbon (Continuous Curve)
+    ctx.beginPath();
+    for (let i = 0; i <= numSamples; i++) {
       const px = plat.x + i * stepX;
       const py = this.getPlatformTopY(plat, px);
-      ctx.beginPath();
-      ctx.moveTo(px, py + 2);
-      ctx.lineTo(px + 5, py - 9);
-      ctx.lineTo(px + 10, py + 2);
-      ctx.fill();
+      if (i === 0) ctx.moveTo(px, py + 8);
+      else ctx.lineTo(px, py + 8);
     }
-
-    // Layer 2: Bright Vibrant Lime Grass Blades with Comic Dark Outlines
-    ctx.fillStyle = '#7CB342';
-    for (let i = 0; i < numSamples; i++) {
-      const px = plat.x + i * stepX + 3;
+    for (let i = numSamples; i >= 0; i--) {
+      const px = plat.x + i * stepX;
       const py = this.getPlatformTopY(plat, px);
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + 6, py - 12);
-      ctx.lineTo(px + 12, py);
-      ctx.fill();
+      ctx.lineTo(px, py - 2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#1B5E20';
+    ctx.fill();
 
-      ctx.strokeStyle = '#1B5E20';
-      ctx.lineWidth = 1.2;
+    // 2. Vibrant Sunlit Emerald Turf Top Layer
+    ctx.beginPath();
+    for (let i = 0; i <= numSamples; i++) {
+      const px = plat.x + i * stepX;
+      const py = this.getPlatformTopY(plat, px);
+      if (i === 0) ctx.moveTo(px, py + 4);
+      else ctx.lineTo(px, py + 4);
+    }
+    for (let i = numSamples; i >= 0; i--) {
+      const px = plat.x + i * stepX;
+      const py = this.getPlatformTopY(plat, px);
+      ctx.lineTo(px, py - 2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#4CAF50';
+    ctx.fill();
+
+    // 3. Natural Varied Organic Grass Blade Tufts
+    ctx.strokeStyle = '#2E7D32';
+    ctx.fillStyle = '#66BB6A';
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    for (let i = 0; i <= numSamples; i += 2) {
+      const px = plat.x + i * stepX;
+      const py = this.getPlatformTopY(plat, px);
+      const bH1 = 6 + (Math.sin(i * 2.7) * 0.5 + 0.5) * 6;
+      const bH2 = 5 + (Math.cos(i * 1.9) * 0.5 + 0.5) * 5;
+
+      ctx.beginPath();
+      ctx.moveTo(px - 3, py + 1);
+      ctx.quadraticCurveTo(px - 5, py - bH1 * 0.6, px - 6, py - bH1);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(px, py + 1);
+      ctx.quadraticCurveTo(px + 1, py - bH2 * 0.7, px + 2, py - bH2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(px + 3, py + 1);
+      ctx.quadraticCurveTo(px + 5, py - bH1 * 0.5, px + 6, py - bH1 * 0.85);
       ctx.stroke();
     }
 
     ctx.restore();
   }
 
-  // 5. Natural Ground Terrain (Deep Subterranean Earth, Rolling Hills & Continuous Top Grass - Viewport Optimized)
+  // 5. Natural Ground Terrain (Stationary Geological Strata, Organic Root Networks & Rich Emerald Turf)
   drawGroundTerrain(ctx, plat, visLeft = 0, visRight = 3400) {
     ctx.save();
 
-    const minX = Math.max(0, Math.floor(visLeft - 80));
-    const maxX = Math.min(this.worldWidth, Math.ceil(visRight + 80));
-    const stepX = this.isMobile ? 28 : 20;
+    // Zero-Jitter Grid Snapping to Fixed Global World Intervals
+    const stepX = this.isMobile ? 24 : 16;
+    const startGx = Math.floor((visLeft - 220) / stepX) * stepX;
+    const endGx = Math.ceil((visRight + 220) / stepX) * stepX;
     const bottomY = this.worldHeight + 2500;
 
-    // A. Build Organic Ground Polygon (Deep Subterranean Bedrock for Visible Region)
+    // A. Deep Earth Bedrock Polygon (Pinned Globally)
     ctx.beginPath();
-    ctx.moveTo(minX - 200, this.getGroundYAt(minX));
+    ctx.moveTo(startGx, this.getGroundYAt(startGx));
 
-    for (let gx = minX; gx <= maxX; gx += stepX) {
+    for (let gx = startGx; gx <= endGx; gx += stepX) {
       ctx.lineTo(gx, this.getGroundYAt(gx));
     }
 
-    ctx.lineTo(maxX + 200, this.getGroundYAt(maxX));
-    ctx.lineTo(maxX + 200, bottomY);
-    ctx.lineTo(minX - 200, bottomY);
+    ctx.lineTo(endGx, bottomY);
+    ctx.lineTo(startGx, bottomY);
     ctx.closePath();
 
-    // B. Subterranean Deep Soil Strata Fill
-    const earthGrad = ctx.createLinearGradient(0, plat.y - 40, 0, plat.y + 700);
-    earthGrad.addColorStop(0, '#5D4037');
-    earthGrad.addColorStop(0.2, '#4E342E');
-    earthGrad.addColorStop(0.5, '#3E2723');
-    earthGrad.addColorStop(1, '#211007');
+    // B. Subterranean Stratified Soil Fill
+    const earthGrad = ctx.createLinearGradient(0, plat.y - 40, 0, plat.y + 750);
+    earthGrad.addColorStop(0, '#4E342E');
+    earthGrad.addColorStop(0.2, '#3E2723');
+    earthGrad.addColorStop(0.5, '#2B1A14');
+    earthGrad.addColorStop(0.85, '#1A0E0A');
+    earthGrad.addColorStop(1, '#0D0705');
 
     ctx.fillStyle = earthGrad;
     ctx.fill();
 
-    // Heavy Black Ground Outline
-    ctx.strokeStyle = '#241C15';
+    // Heavy Contour Outline
+    ctx.strokeStyle = '#21160F';
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // C. Embedded Faceted Rock Chunks in Visible Underground Earth
-    for (let sx = 120; sx < this.worldWidth; sx += 340) {
-      if (sx < minX - 100 || sx > maxX + 100) continue;
-      const topY = this.getGroundYAt(sx);
-      const depthOffset1 = 45 + ((sx * 13) % 40);
-      const depthOffset2 = 95 + ((sx * 17) % 50);
-      this.drawFacetedRock(ctx, sx + 20, topY + depthOffset1, 14, (sx * 0.05), sx);
-      if (sx % 680 === 0) {
-        this.drawFacetedRock(ctx, sx + 140, topY + depthOffset2, 18, (sx * 0.08) + 1, sx + 1);
+    // C. Natural Geological Sedimentary Rock Strata Bands
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    ctx.lineWidth = 3;
+    const strataDepths = [1120, 1180, 1260, 1360, 1480];
+    for (const sY of strataDepths) {
+      ctx.beginPath();
+      for (let gx = startGx; gx <= endGx; gx += stepX * 2) {
+        const offset = Math.sin((gx / 240) * Math.PI) * 8 + Math.sin((gx / 90) * Math.PI) * 4;
+        const syActual = sY + offset;
+        if (gx === startGx) ctx.moveTo(gx, syActual);
+        else ctx.lineTo(gx, syActual);
       }
+      ctx.stroke();
     }
 
-    // D. Visible Stylized Cartoon Grass
-    const grassStep1 = this.isMobile ? 18 : 10;
-    ctx.fillStyle = '#33691E';
-    for (let gx = minX; gx <= maxX; gx += grassStep1) {
-      const gy = this.getGroundYAt(gx);
+    // D. Organic Subterranean Tree Root Strands
+    ctx.strokeStyle = '#2E1C14';
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    for (let rx = startGx; rx <= endGx; rx += 140) {
+      const topY = this.getGroundYAt(rx);
       ctx.beginPath();
-      ctx.moveTo(gx, gy + 2);
-      ctx.lineTo(gx + 4, gy - 8);
-      ctx.lineTo(gx + 8, gy + 2);
-      ctx.fill();
+      ctx.moveTo(rx, topY + 4);
+      ctx.quadraticCurveTo(rx + 8, topY + 25, rx + 4, topY + 48);
+      ctx.quadraticCurveTo(rx - 4, topY + 65, rx + 2, topY + 85);
+      ctx.stroke();
+
+      // Small secondary root branch
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(rx + 6, topY + 30);
+      ctx.lineTo(rx + 16, topY + 46);
+      ctx.stroke();
+      ctx.lineWidth = 2.2;
     }
 
-    const grassStep2 = this.isMobile ? 22 : 12;
-    ctx.fillStyle = '#689F38';
-    for (let gx = minX; gx <= maxX; gx += grassStep2) {
+    // E. Continuous Lush Turf Canopy (No Triangles)
+    // 1. Dark Undergrowth Shadow Ribbon
+    ctx.beginPath();
+    for (let gx = startGx; gx <= endGx; gx += stepX) {
       const gy = this.getGroundYAt(gx);
-      ctx.beginPath();
-      ctx.moveTo(gx, gy);
-      ctx.lineTo(gx + 5, gy - 11);
-      ctx.lineTo(gx + 10, gy);
-      ctx.fill();
+      if (gx === startGx) ctx.moveTo(gx, gy + 9);
+      else ctx.lineTo(gx, gy + 9);
+    }
+    for (let gx = endGx; gx >= startGx; gx -= stepX) {
+      const gy = this.getGroundYAt(gx);
+      ctx.lineTo(gx, gy - 2);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#1B5E20';
+    ctx.fill();
 
-      if (!this.isMobile) {
-        ctx.strokeStyle = '#1B5E20';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+    // 2. Vibrant Emerald Sunlit Turf Cap
+    ctx.beginPath();
+    for (let gx = startGx; gx <= endGx; gx += stepX) {
+      const gy = this.getGroundYAt(gx);
+      if (gx === startGx) ctx.moveTo(gx, gy + 4);
+      else ctx.lineTo(gx, gy + 4);
+    }
+    for (let gx = endGx; gx >= startGx; gx -= stepX) {
+      const gy = this.getGroundYAt(gx);
+      ctx.lineTo(gx, gy - 3);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#4CAF50';
+    ctx.fill();
+
+    // 3. Natural Organic Grass Blade Clusters & Flowering Flora
+    ctx.strokeStyle = '#2E7D32';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    for (let gx = startGx; gx <= endGx; gx += 18) {
+      const gy = this.getGroundYAt(gx);
+      const bH1 = 7 + (Math.sin(gx * 0.12) * 0.5 + 0.5) * 6;
+      const bH2 = 5 + (Math.cos(gx * 0.19) * 0.5 + 0.5) * 5;
+
+      ctx.beginPath();
+      ctx.moveTo(gx - 3, gy + 1);
+      ctx.quadraticCurveTo(gx - 5, gy - bH1 * 0.6, gx - 6, gy - bH1);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(gx, gy + 1);
+      ctx.quadraticCurveTo(gx + 1, gy - bH2 * 0.7, gx + 2, gy - bH2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(gx + 3, gy + 1);
+      ctx.quadraticCurveTo(gx + 5, gy - bH1 * 0.5, gx + 6, gy - bH1 * 0.85);
+      ctx.stroke();
+
+      // Wildflower Blossoms at fixed intervals
+      if (gx % 90 === 0) {
+        const flowerColor = (gx % 270 === 0) ? '#FFEB3B' : (gx % 180 === 0) ? '#40C4FF' : '#FF5252';
+        ctx.fillStyle = flowerColor;
+        ctx.beginPath();
+        ctx.arc(gx + 1, gy - bH2 - 2, 2, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
@@ -3716,14 +3892,24 @@ class MultiplayerGameApp {
     const equippedWep = isLocal ? this.currentWeapon : (p.weapon || 'uzi');
 
     if (isLocal) {
-      ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
-      ctx.lineWidth = 1.2;
+      const isFiring = this.mouse.isDown || this.touchJoyRight.isFiring;
+      const isAiming = this.touchJoyRight.isAiming || (this.mouse && this.mouse.active);
+
+      ctx.strokeStyle = isFiring ? 'rgba(255, 51, 102, 0.7)' : (isAiming ? 'rgba(0, 229, 255, 0.55)' : 'rgba(0, 229, 255, 0.25)');
+      ctx.lineWidth = isFiring ? 2.0 : 1.4;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(pAim) * 350, Math.sin(pAim) * 350);
+      ctx.lineTo(Math.cos(pAim) * 380, Math.sin(pAim) * 380);
       ctx.stroke();
       ctx.setLineDash([]);
+
+      if (isAiming || isFiring) {
+        ctx.fillStyle = isFiring ? '#FF3366' : '#00E5FF';
+        ctx.beginPath();
+        ctx.arc(Math.cos(pAim) * 380, Math.sin(pAim) * 380, isFiring ? 4 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.save();
@@ -4471,8 +4657,9 @@ class MultiplayerGameApp {
 
       this.showWaveBanner(`WAVE ${this.swarmState.wave} CLEARED!`, `+${waveBonus} BONUS PTS • NEXT WAVE INCOMING`);
 
-      // Schedule next wave
-      setTimeout(() => {
+      // Schedule next wave with timer tracking (prevents zombie timers)
+      if (this.swarmNextWaveTimer) clearTimeout(this.swarmNextWaveTimer);
+      this.swarmNextWaveTimer = setTimeout(() => {
         if (this.gameMode === 'SWARM_SURVIVAL' && !this.localPlayer.isDead) {
           this.startSwarmWave(this.swarmState.wave + 1);
         }
